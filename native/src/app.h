@@ -48,6 +48,7 @@ private:
     static constexpr UINT_PTR kExternalFeedbackTimer = 7;
     static constexpr UINT_PTR kSnoozeStatusTimer = 8;
     static constexpr UINT_PTR kUsageChartAnimationTimer = 9;
+    static constexpr UINT_PTR kTrayClickTimer = 10;
     static constexpr int kGlobalShortcutId = 1;
 
     static LRESULT CALLBACK PopupProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -149,7 +150,8 @@ private:
     std::optional<UpdateCheckState> pending_update_check_;
     UpdateCheckState update_check_;
     bool tray_added_ = false;
-    bool tray_double_click_pending_ = false;
+    bool tray_click_pending_ = false;
+    bool tray_double_click_suppressed_ = false;
     SettingsPersistenceState settings_persistence_ = SettingsPersistenceState::Idle;
     ui::CopySummaryState usage_summary_copy_state_ = ui::CopySummaryState::Idle;
     ExternalActionFeedback popup_external_feedback_;

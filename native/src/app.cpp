@@ -1967,6 +1967,16 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             refresh_angle_ = std::fmod(refresh_angle_ + 12.0F, 360.0F);
             InvalidateRect(window, nullptr, FALSE);
         } else if (wparam == kHoverAnimationTimer) TickPopupHoverAnimation();
+        else if (wparam == kTrayClickTimer) {
+            KillTimer(window, kTrayClickTimer);
+            if (tray_double_click_suppressed_) {
+                tray_double_click_suppressed_ = false;
+                tray_click_pending_ = false;
+            } else if (tray_click_pending_) {
+                tray_click_pending_ = false;
+                TogglePopup();
+            }
+        }
         else if (wparam == kCopyFeedbackTimer) {
             KillTimer(window, kCopyFeedbackTimer);
             usage_summary_copy_state_ = ui::CopySummaryState::Idle;
@@ -2023,16 +2033,22 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     case kTrayMessage: {
         const UINT event = LOWORD(lparam);
         if (event == WM_LBUTTONDBLCLK) {
-            tray_double_click_pending_ = true;
+            KillTimer(window, kTrayClickTimer);
+            tray_click_pending_ = false;
+            tray_double_click_suppressed_ = true;
+            SetTimer(window, kTrayClickTimer, GetDoubleClickTime() + 50U, nullptr);
             ShowPopup();
-        } else if (event == WM_LBUTTONUP) {
-            if (tray_double_click_pending_) {
-                tray_double_click_pending_ = false;
-                ShowPopup();
-            } else TogglePopup();
-        } else if (event == NIN_SELECT || event == NIN_KEYSELECT) TogglePopup();
+        } else if (event == WM_LBUTTONUP || event == NIN_SELECT) {
+            if (!tray_double_click_suppressed_ && !tray_click_pending_) {
+                tray_click_pending_ = true;
+                SetTimer(window, kTrayClickTimer, GetDoubleClickTime() + 50U, nullptr);
+            }
+        } else if (event == NIN_KEYSELECT) TogglePopup();
         else if (event == NIN_BALLOONUSERCLICK) ShowPopup();
         else if (event == WM_RBUTTONUP || event == WM_CONTEXTMENU) {
+            KillTimer(window, kTrayClickTimer);
+            tray_click_pending_ = false;
+            tray_double_click_suppressed_ = false;
             POINT point{GET_X_LPARAM(wparam), GET_Y_LPARAM(wparam)};
             if (point.x == 0 && point.y == 0) GetCursorPos(&point);
             ShowTrayMenu(point);
