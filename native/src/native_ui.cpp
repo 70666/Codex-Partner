@@ -3,9 +3,11 @@
 #include "usage_freshness.h"
 #include "usage_summary.h"
 #include "version.h"
+#include "resource.h"
 
 #include <objidl.h>
 #include <gdiplus.h>
+#include <shlwapi.h>
 
 #include <algorithm>
 #include <array>
@@ -36,6 +38,41 @@ struct Palette {
     Color yellow;
     Color red;
 };
+
+Image* PartnerMark() noexcept {
+    struct ResourceImage {
+        IStream* stream = nullptr;
+        Image* image = nullptr;
+        ResourceImage() {
+            HMODULE module = GetModuleHandleW(nullptr);
+            HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(IDR_CODEX_PARTNER_MARK), RT_RCDATA);
+            if (!resource) return;
+            HGLOBAL loaded = LoadResource(module, resource);
+            const DWORD size = SizeofResource(module, resource);
+            const void* bytes = loaded ? LockResource(loaded) : nullptr;
+            if (!bytes || size == 0) return;
+            stream = SHCreateMemStream(static_cast<const BYTE*>(bytes), size);
+            if (!stream) return;
+            image = Image::FromStream(stream, FALSE);
+            if (!image || image->GetLastStatus() != Ok) {
+                delete image;
+                image = nullptr;
+            }
+        }
+        ~ResourceImage() {
+            delete image;
+            if (stream) stream->Release();
+        }
+    };
+    static ResourceImage resource;
+    return resource.image;
+}
+
+void DrawPartnerMark(Graphics& graphics, const RectF& rect) {
+    if (Image* mark = PartnerMark()) {
+        graphics.DrawImage(mark, rect);
+    }
+}
 
 Palette Colors(bool light) {
     if (light) return {
@@ -376,16 +413,33 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
         graphics.DrawLine(&grid_pen, plot.X, y, plot.GetRight(), y);
     }
 
-    std::array<std::size_t, 30> totals{};
-    std::size_t maximum = 0;
-    for (const ChartSeries& item : series) {
-        for (std::size_t day = 0; day < totals.size(); ++day) {
-            totals[day] += item.usage[day];
+    // The log scanner naturally produces sparse daily buckets. Plot a small
+    // five-day weighted window so missing single days do not turn the wave into
+    // misleading saw teeth; tooltips continue to report the exact raw counts.
+    std::vector<std::array<double, 30>> smoothed(series.size());
+    std::array<double, 30> totals{};
+    double maximum = 0.0;
+    constexpr std::array<double, 5> weights{1.0, 2.0, 3.0, 2.0, 1.0};
+    for (std::size_t series_index = 0; series_index < series.size(); ++series_index) {
+        for (std::size_t day = 0; day < 30; ++day) {
+            double weighted = 0.0;
+            double weight_total = 0.0;
+            for (int offset = -2; offset <= 2; ++offset) {
+                const int source = static_cast<int>(day) + offset;
+                if (source < 0 || source >= 30) continue;
+                const double weight = weights[static_cast<std::size_t>(offset + 2)];
+                weighted += static_cast<double>(series[series_index].usage[static_cast<std::size_t>(source)]) * weight;
+                weight_total += weight;
+            }
+            smoothed[series_index][day] = weight_total > 0.0 ? weighted / weight_total : 0.0;
+            totals[day] += smoothed[series_index][day];
             maximum = std::max(maximum, totals[day]);
         }
     }
     std::array<double, 30> lower{};
     const float eased = 1.0F - std::pow(1.0F - std::clamp(progress, 0.0F, 1.0F), 3.0F);
+    const GraphicsState wave_state = graphics.Save();
+    graphics.SetClip(plot);
     for (std::size_t series_index = 0; series_index < series.size(); ++series_index) {
         std::vector<PointF> top;
         std::vector<PointF> bottom;
@@ -393,7 +447,7 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
         bottom.reserve(30);
         for (std::size_t day = 0; day < 30; ++day) {
             const float x = plot.X + plot.Width * static_cast<float>(day) / 29.0F;
-            const double upper_value = lower[day] + static_cast<double>(series[series_index].usage[day]);
+            const double upper_value = lower[day] + smoothed[series_index][day];
             const float upper = maximum == 0 ? plot.GetBottom() : plot.GetBottom() -
                 plot.Height * static_cast<float>(upper_value / static_cast<double>(maximum)) * eased;
             const float base = maximum == 0 ? plot.GetBottom() : plot.GetBottom() -
@@ -404,16 +458,17 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
         }
         if (series[series_index].total_usage == 0) continue;
         GraphicsPath area;
-        area.AddCurve(top.data(), static_cast<INT>(top.size()), 0.35F);
+        area.AddCurve(top.data(), static_cast<INT>(top.size()), 0.22F);
         area.AddLine(top.back(), bottom.back());
         std::reverse(bottom.begin(), bottom.end());
-        area.AddCurve(bottom.data(), static_cast<INT>(bottom.size()), 0.35F);
+        area.AddCurve(bottom.data(), static_cast<INT>(bottom.size()), 0.22F);
         area.CloseFigure();
         SolidBrush fill(fills[series_index]);
         Pen stroke(strokes[series_index], 1.4F);
         graphics.FillPath(&fill, &area);
-        graphics.DrawCurve(&stroke, top.data(), static_cast<INT>(top.size()), 0.35F);
+        graphics.DrawCurve(&stroke, top.data(), static_cast<INT>(top.size()), 0.22F);
     }
+    graphics.Restore(wave_state);
 
     Text(graphics, ChartDate(0, chinese), R(plot.X, 441.0F, 70.0F, 18.0F), 8.5F, FontStyleRegular, palette.muted);
     Text(graphics, ChartDate(29, chinese), R(plot.GetRight() - 70.0F, 441.0F, 70.0F, 18.0F),
@@ -432,7 +487,10 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
 
     const float tooltip_width = 300.0F;
     const float tooltip_height = 42.0F + 22.0F * static_cast<float>(series.size());
-    const float tooltip_x = marker_x > plot.X + plot.Width * 0.56F ? marker_x - tooltip_width - 8.0F : marker_x + 8.0F;
+    const float desired_tooltip_x = marker_x > plot.X + plot.Width * 0.56F ?
+        marker_x - tooltip_width - 8.0F : marker_x + 8.0F;
+    const float tooltip_x = std::clamp(desired_tooltip_x, card.X + 8.0F,
+        card.GetRight() - tooltip_width - 8.0F);
     const float tooltip_y = 312.0F;
     FillRounded(graphics, R(tooltip_x, tooltip_y, tooltip_width, tooltip_height), 9.0F, palette.elevated);
     StrokeRounded(graphics, R(tooltip_x, tooltip_y, tooltip_width, tooltip_height), 9.0F, palette.border);
@@ -646,8 +704,7 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     SolidBrush background(palette.background);
     graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight));
 
-    FillRounded(graphics, R(16.0F, 14.0F, 34.0F, 34.0F), 9.0F, palette.accent);
-    Text(graphics, L"<>\u0338", R(18.0F, 14.0F, 30.0F, 34.0F), 13.0F, FontStyleBold, Color(255, 255, 255, 255), StringAlignmentCenter);
+    DrawPartnerMark(graphics, R(14.0F, 12.0F, 38.0F, 38.0F));
     Text(graphics, L"Codex Partner", R(60.0F, 10.0F, 180.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
     const std::wstring header_context = identity_hidden ? T(chinese, L"Identity hidden", L"身份信息已隐藏") :
         snapshot.plan.empty() ? T(chinese, L"Native for Windows", L"Windows 原生版") : snapshot.plan;
@@ -772,9 +829,7 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
         StrokeRounded(graphics, R(4.0F, 4.0F, 376.0F, 68.0F), 11.0F, palette.accent);
     }
 
-    FillRounded(graphics, R(12.0F, 18.0F, 38.0F, 38.0F), 10.0F, palette.accent);
-    Text(graphics, L"<>\u0338", R(14.0F, 18.0F, 34.0F, 38.0F), 13.0F, FontStyleBold,
-        Color(255, 255, 255, 255), StringAlignmentCenter);
+    DrawPartnerMark(graphics, R(10.0F, 16.0F, 42.0F, 42.0F));
     Text(graphics, L"Codex", R(59.0F, 13.0F, 70.0F, 24.0F), 13.0F, FontStyleBold, palette.text);
     const std::wstring state = refresh_phase == RefreshPhase::FetchingUsage ? T(chinese, L"Refreshing", L"正在刷新") :
         refresh_phase == RefreshPhase::ScanningSpend ? T(chinese, L"Spend scan", L"费用扫描") :
@@ -906,8 +961,7 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         Text(graphics, T(chinese, L"PROVIDERS", L"提供商"), R(218.0F, 76.0F, 180.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         FillRounded(graphics, R(214.0F, 104.0F, 454.0F, 128.0F), 12.0F, palette.surface);
         StrokeRounded(graphics, R(214.0F, 104.0F, 454.0F, 128.0F), 12.0F, palette.border);
-        FillRounded(graphics, R(230.0F, 122.0F, 42.0F, 42.0F), 10.0F, palette.accent);
-        Text(graphics, L"<>\u0338", R(232.0F, 122.0F, 38.0F, 42.0F), 13.0F, FontStyleBold, Color(255, 255, 255, 255), StringAlignmentCenter);
+        DrawPartnerMark(graphics, R(228.0F, 120.0F, 46.0F, 46.0F));
         Text(graphics, L"Codex", R(286.0F, 116.0F, 190.0F, 28.0F), 17.0F, FontStyleBold, palette.text);
         const bool needs_login = NeedsProviderSetup(snapshot);
         const wchar_t* connection = needs_login ? T(chinese, L"Sign-in required", L"需要登录") :

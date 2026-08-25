@@ -1,2 +1,3 @@
 #pragma once
 #define IDI_CODEX_PARTNER 101
+#define IDR_CODEX_PARTNER_MARK 102

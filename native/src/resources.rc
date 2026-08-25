@@ -1,6 +1,7 @@
 #include "resource.h"
 #include "version.h"
 IDI_CODEX_PARTNER ICON "..\\assets\\CodexPartner.ico"
+IDR_CODEX_PARTNER_MARK RCDATA "..\\assets\\CodexPartnerMark.png"
 
 1 VERSIONINFO
  FILEVERSION CODEX_PARTNER_VERSION_TUPLE

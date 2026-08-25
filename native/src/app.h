@@ -128,7 +128,6 @@ private:
     HANDLE singleton_ = nullptr;
     HANDLE activation_event_ = nullptr;
     NOTIFYICONDATAW tray_{};
-    HICON dynamic_tray_icon_ = nullptr;
     ULONG_PTR gdiplus_token_ = 0;
     UINT taskbar_created_message_ = 0;
     SettingsStore settings_store_;

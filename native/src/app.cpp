@@ -537,6 +537,19 @@ bool App::Initialize(int show_command) {
         else if (proof == L"settings:about") settings_tab_ = ui::SettingsTab::About;
         else settings_tab_ = ui::SettingsTab::General;
         ShowSettings();
+        if (settings_tab_ == ui::SettingsTab::UsageSpend) {
+            const std::wstring chart_hover = EnvironmentValue(L"CODEX_PARTNER_PROOF_CHART_HOVER");
+            if (!chart_hover.empty()) {
+                try {
+                    usage_chart_hover_ = std::min<std::size_t>(29, std::stoul(chart_hover));
+                    usage_chart_progress_ = 1.0F;
+                    KillTimer(settings_window_, kUsageChartAnimationTimer);
+                    InvalidateRect(settings_window_, nullptr, FALSE);
+                } catch (...) {
+                    usage_chart_hover_.reset();
+                }
+            }
+        }
     }
     else if (proof.starts_with(L"floatbar")) ShowFloatBar(true);
     else if (proof.starts_with(L"popup") || (!minimized_argument && show_command != SW_HIDE)) ShowPopup();
@@ -625,24 +638,18 @@ bool App::CreateWindows() {
 }
 
 bool App::AddTrayIcon() {
-    const HICON previous_dynamic = dynamic_tray_icon_;
-    HICON next_dynamic = CreateUsageTrayIconHandle(SnapshotCopy());
     tray_ = {};
     tray_.cbSize = sizeof(tray_);
     tray_.hWnd = popup_;
     tray_.uID = 1;
     tray_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     tray_.uCallbackMessage = kTrayMessage;
-    tray_.hIcon = next_dynamic ? next_dynamic : LoadIconW(instance_, MAKEINTRESOURCEW(IDI_CODEX_PARTNER));
+    tray_.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(IDI_CODEX_PARTNER));
     wcscpy_s(tray_.szTip, ShouldUseChinese(settings_.language) ? L"Codex Partner - 正在检查使用情况" : L"Codex Partner - checking usage");
     tray_added_ = Shell_NotifyIconW(NIM_ADD, &tray_) != FALSE;
     if (!tray_added_) {
-        if (next_dynamic) DestroyIcon(next_dynamic);
-        tray_.hIcon = previous_dynamic;
         return false;
     }
-    dynamic_tray_icon_ = next_dynamic;
-    if (previous_dynamic && previous_dynamic != dynamic_tray_icon_) DestroyIcon(previous_dynamic);
     tray_.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &tray_);
     return true;
@@ -651,8 +658,6 @@ bool App::AddTrayIcon() {
 void App::RemoveTrayIcon() {
     if (tray_added_) Shell_NotifyIconW(NIM_DELETE, &tray_);
     tray_added_ = false;
-    if (dynamic_tray_icon_) DestroyIcon(dynamic_tray_icon_);
-    dynamic_tray_icon_ = nullptr;
     tray_.hIcon = nullptr;
 }
 
@@ -672,18 +677,8 @@ void App::UpdateTrayTooltip() {
     }
     tip += L" · " + FormatUsageFreshness(snapshot.updated_at, chinese);
     wcsncpy_s(tray_.szTip, tip.c_str(), _TRUNCATE);
-    HICON next_dynamic = CreateUsageTrayIconHandle(snapshot);
-    const HICON previous_dynamic = dynamic_tray_icon_;
-    tray_.uFlags = NIF_TIP | (next_dynamic ? NIF_ICON : 0U);
-    if (next_dynamic) tray_.hIcon = next_dynamic;
-    const bool modified = tray_added_ && Shell_NotifyIconW(NIM_MODIFY, &tray_) != FALSE;
-    if (next_dynamic && modified) {
-        dynamic_tray_icon_ = next_dynamic;
-        if (previous_dynamic && previous_dynamic != dynamic_tray_icon_) DestroyIcon(previous_dynamic);
-    } else if (next_dynamic) {
-        DestroyIcon(next_dynamic);
-        tray_.hIcon = previous_dynamic ? previous_dynamic : LoadIconW(instance_, MAKEINTRESOURCEW(IDI_CODEX_PARTNER));
-    }
+    tray_.uFlags = NIF_TIP;
+    if (tray_added_) Shell_NotifyIconW(NIM_MODIFY, &tray_);
 }
 
 void App::ShowTrayMenu(POINT point) {
