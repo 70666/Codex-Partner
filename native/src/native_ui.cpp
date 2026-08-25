@@ -788,25 +788,36 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
         snapshot.error.empty() ? palette.muted : palette.yellow);
 
     Pen divider(palette.border, 1.0F);
-    graphics.DrawLine(&divider, 138.0F, 15.0F, 138.0F, 61.0F);
-    graphics.DrawLine(&divider, 258.0F, 15.0F, 258.0F, 61.0F);
+    const bool has_session = snapshot.session.has_value();
+    const bool has_weekly = snapshot.weekly.has_value();
+    const bool two_metrics = has_session && has_weekly;
+    if (has_session || has_weekly) {
+        const float first_divider = two_metrics ? 138.0F : 172.0F;
+        graphics.DrawLine(&divider, first_divider, 15.0F, first_divider, 61.0F);
+    }
+    if (two_metrics) graphics.DrawLine(&divider, 258.0F, 15.0F, 258.0F, 61.0F);
 
-    const auto draw_metric = [&](float x, const std::optional<RateWindow>& value, const wchar_t* fallback_title) {
-        const std::wstring title = value ? LocalWindowTitle(*value, chinese) : fallback_title;
-        const std::wstring percent = value ? Percent(value->used_percent) : L"—";
-        const bool pace_risk = value && pace && value->window_minutes == pace->window_minutes &&
-            value->title == pace->window_title;
-        const Color value_color = !value ? palette.muted : value->used_percent >= 90.0 ? palette.red :
-            value->used_percent >= 70.0 || pace_risk ? palette.yellow : palette.green;
-        Text(graphics, title, R(x, 6.0F, 100.0F, 20.0F), 9.0F, FontStyleBold, palette.muted);
-        Text(graphics, percent, R(x, 21.0F, 100.0F, 23.0F), 16.0F, FontStyleBold,
+    const auto draw_metric = [&](float x, float width, const RateWindow& value) {
+        const std::wstring title = LocalWindowTitle(value, chinese);
+        const bool pace_risk = pace && value.window_minutes == pace->window_minutes &&
+            value.title == pace->window_title;
+        const Color value_color = value.used_percent >= 90.0 ? palette.red :
+            value.used_percent >= 70.0 || pace_risk ? palette.yellow : palette.green;
+        Text(graphics, title, R(x, 6.0F, width, 20.0F), 9.0F, FontStyleBold, palette.muted);
+        Text(graphics, Percent(value.used_percent), R(x, 21.0F, width, 23.0F), 16.0F, FontStyleBold,
             value_color);
-        Text(graphics, FloatBarReset(value, chinese), R(x, 43.0F, 104.0F, 15.0F), 7.5F,
-            FontStyleRegular, value && value->resets_at ? palette.secondary : palette.muted);
-        DrawProgress(graphics, R(x, 62.0F, 92.0F, 4.0F), value ? value->used_percent : 0.0, palette);
+        Text(graphics, FloatBarReset(value, chinese), R(x, 43.0F, width, 15.0F), 7.5F,
+            FontStyleRegular, value.resets_at ? palette.secondary : palette.muted);
+        DrawProgress(graphics, R(x, 62.0F, width - 8.0F, 4.0F), value.used_percent, palette);
     };
-    draw_metric(152.0F, snapshot.session, T(chinese, L"Session", L"当前周期"));
-    draw_metric(272.0F, snapshot.weekly, T(chinese, L"Weekly", L"每周额度"));
+    if (two_metrics) {
+        draw_metric(152.0F, 100.0F, *snapshot.session);
+        draw_metric(272.0F, 100.0F, *snapshot.weekly);
+    } else if (snapshot.session) {
+        draw_metric(194.0F, 174.0F, *snapshot.session);
+    } else if (snapshot.weekly) {
+        draw_metric(194.0F, 174.0F, *snapshot.weekly);
+    }
 
     const float close_emphasis = hovered == FloatBarAction::Hide ? hover_progress : 0.0F;
     const RectF close_rect = pressed == FloatBarAction::Hide ? R(388.0F, 23.0F, 27.0F, 27.0F) : R(387.0F, 22.0F, 29.0F, 29.0F);
