@@ -21,7 +21,7 @@ Action Step(std::span<const Action> actions, Action current, int direction) noex
     return actions[(index + 1) % actions.size()];
 }
 
-constexpr std::array kPopupActions{PopupAction::CopySummary, PopupAction::Refresh, PopupAction::Settings, PopupAction::Primary};
+constexpr std::array kPopupActions{PopupAction::CopySummary, PopupAction::Refresh, PopupAction::Settings, PopupAction::Close, PopupAction::Primary};
 constexpr std::array kFloatBarActions{FloatBarAction::OpenPopup, FloatBarAction::Hide};
 constexpr std::array kGeneralActions{
     SettingsAction::SelectGeneral,
@@ -121,10 +121,10 @@ SettingsAction StepSettingsAction(SettingsTab tab, SettingsAction current, int d
 }
 
 bool ShouldDismissPopupOnDeactivate(
-    bool settings_visible,
-    bool proof_mode,
-    bool activation_handoff_pending) noexcept {
-    return !settings_visible && !proof_mode && !activation_handoff_pending;
+    bool,
+    bool,
+    bool) noexcept {
+    return false;
 }
 
 }  // namespace codex_partner::ui

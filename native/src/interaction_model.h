@@ -10,9 +10,8 @@ namespace codex_partner::ui {
 [[nodiscard]] FloatBarAction StepFloatBarAction(FloatBarAction current, int direction) noexcept;
 [[nodiscard]] SettingsAction StepSettingsAction(SettingsTab tab, SettingsAction current, int direction) noexcept;
 
-// Popup blur normally dismisses the tray surface. During a second-instance
-// activation handoff the popup stays visible until it receives real user input;
-// Windows can otherwise grant and immediately revoke foreground ownership.
+// Codex Partner is an inspectable surface, not a transient context menu. Losing
+// activation never dismisses it; explicit Close, Escape, or tray toggle does.
 [[nodiscard]] bool ShouldDismissPopupOnDeactivate(
     bool settings_visible,
     bool proof_mode,

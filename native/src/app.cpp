@@ -600,9 +600,10 @@ bool App::CreateWindows() {
     if (!popup_) return false;
     SetRoundedCorners(popup_);
 
+    const DWORD settings_style = WS_POPUP | WS_THICKFRAME | WS_SYSMENU |
+        (proof_surface.starts_with(L"settings") ? WS_VISIBLE : 0U);
     RECT settings_rect{0, 0, MulDiv(ui::kSettingsWindowWidth, static_cast<int>(dpi), 96), MulDiv(ui::kSettingsWindowHeight, static_cast<int>(dpi), 96)};
-    AdjustWindowRectExForDpi(&settings_rect, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, 0, dpi);
-    const DWORD settings_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | (proof_surface.starts_with(L"settings") ? WS_VISIBLE : 0U);
+    AdjustWindowRectExForDpi(&settings_rect, settings_style, FALSE, 0, dpi);
     settings_window_ = CreateWindowExW(0, kSettingsClass, ShouldUseChinese(settings_.language) ? L"Codex Partner 设置" : L"Codex Partner Settings", settings_style, CW_USEDEFAULT, CW_USEDEFAULT, settings_rect.right - settings_rect.left, settings_rect.bottom - settings_rect.top, nullptr, nullptr, instance_, this);
     if (!settings_window_) return false;
 
@@ -828,6 +829,14 @@ void App::ShowSettings() {
     }
     ShowWindow(settings_window_, SW_SHOWNORMAL);
     SetForegroundWindow(settings_window_);
+    if (settings_tab_ == ui::SettingsTab::UsageSpend) {
+        usage_chart_hover_.reset();
+        // Render a visible first frame immediately, then grow the series. A
+        // zero-height first paint reads as an empty chart on slower systems.
+        usage_chart_progress_ = AnimationsEnabled() ? 0.08F : 1.0F;
+        KillTimer(settings_window_, kUsageChartAnimationTimer);
+        if (usage_chart_progress_ < 1.0F) SetTimer(settings_window_, kUsageChartAnimationTimer, 16, nullptr);
+    }
     SyncNotificationSnoozeTimer();
     InvalidateRect(settings_window_, nullptr, FALSE);
 }
@@ -1155,6 +1164,7 @@ void App::ActivatePopupAction(ui::PopupAction action) {
         RefreshAsync();
         break;
     case ui::PopupAction::Settings: ShowSettings(); break;
+    case ui::PopupAction::Close: HidePopup(); break;
     case ui::PopupAction::Primary: {
         const UsagePrimaryTarget target = ResolveUsagePrimaryTarget(SnapshotCopy());
         if (target == UsagePrimaryTarget::ProviderSetup) {
@@ -1252,6 +1262,7 @@ void App::ActivateSettingsAction(ui::SettingsAction action) {
             SetTimer(settings_window_, kSavedFeedbackTimer, 1600, nullptr);
         }
         break;
+    case ui::SettingsAction::Close: HideSettings(); break;
     case ui::SettingsAction::None: break;
     }
     if (settings_tab_ != previous_tab) {
@@ -1950,14 +1961,7 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             ActivatePopupAction(popup_hover_);
         }
         return 0;
-    case WM_ACTIVATE:
-        if (LOWORD(wparam) == WA_INACTIVE && ui::ShouldDismissPopupOnDeactivate(
-            IsWindowVisible(settings_window_) != FALSE,
-            !EnvironmentValue(L"CODEX_PARTNER_PROOF_MODE").empty(),
-            popup_activation_handoff_pending_)) {
-            HidePopup();
-        }
-        return 0;
+    case WM_ACTIVATE: return 0;
     case WM_TIMER:
         if (wparam == kRefreshTimer) RefreshAsync(false);
         else if (wparam == kPressFeedbackTimer) {
@@ -2095,6 +2099,17 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         return 0;
     }
     case WM_GETDLGCODE: return DLGC_WANTALLKEYS | DLGC_WANTARROWS | DLGC_WANTTAB;
+    case WM_NCHITTEST: {
+        const LRESULT edge = DefWindowProcW(window, message, wparam, lparam);
+        if (edge != HTCLIENT) return edge;
+        POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+        ScreenToClient(window, &point);
+        const UINT dpi = GetDpiForWindow(window);
+        point.x = static_cast<LONG>(std::lround(static_cast<float>(MulDiv(point.x, 96, static_cast<int>(dpi))) / ui::kContentScale));
+        point.y = static_cast<LONG>(std::lround(static_cast<float>(MulDiv(point.y, 96, static_cast<int>(dpi))) / ui::kContentScale));
+        if (point.y >= 0 && point.y < 62 && ui::HitTestSettings(point, settings_tab_) == ui::SettingsAction::None) return HTCAPTION;
+        return HTCLIENT;
+    }
     case WM_ERASEBKGND: return 1;
     case WM_PRINTCLIENT: {
         const UsageSnapshot snapshot = SnapshotCopy();

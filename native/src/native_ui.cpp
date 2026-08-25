@@ -177,6 +177,19 @@ void DrawCopyButton(Graphics& graphics, RectF rect, const Palette& palette, Copy
     }
 }
 
+void DrawCloseButton(Graphics& graphics, RectF rect, const Palette& palette, bool hovered, bool pressed,
+    float progress) {
+    if (pressed) rect = R(rect.X + 1.0F, rect.Y + 1.0F, rect.Width - 2.0F, rect.Height - 2.0F);
+    const float emphasis = hovered ? progress : 0.0F;
+    FillRounded(graphics, rect, 8.0F, Blend(palette.elevated, palette.red, emphasis * 0.16F));
+    StrokeRounded(graphics, rect, 8.0F, Blend(palette.border, palette.red, emphasis * 0.72F));
+    Pen pen(hovered || pressed ? palette.red : palette.secondary, pressed ? 2.0F : 1.7F);
+    const float cx = rect.X + rect.Width / 2.0F;
+    const float cy = rect.Y + rect.Height / 2.0F;
+    graphics.DrawLine(&pen, cx - 5.0F, cy - 5.0F, cx + 5.0F, cy + 5.0F);
+    graphics.DrawLine(&pen, cx + 5.0F, cy - 5.0F, cx - 5.0F, cy + 5.0F);
+}
+
 void DrawProgress(Graphics& graphics, const RectF& rect, double percent, const Palette& palette) {
     FillRounded(graphics, rect, rect.Height / 2.0F, palette.border);
     const float width = std::max(rect.Height, rect.Width * static_cast<float>(std::clamp(percent, 0.0, 100.0) / 100.0));
@@ -612,10 +625,12 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     const std::wstring header_context = identity_hidden ? T(chinese, L"Identity hidden", L"身份信息已隐藏") :
         snapshot.plan.empty() ? T(chinese, L"Native for Windows", L"Windows 原生版") : snapshot.plan;
     Text(graphics, header_context, R(60.0F, 31.0F, 190.0F, 18.0F), 10.0F, FontStyleRegular, palette.muted);
-    DrawCopyButton(graphics, R(280.0F, 15.0F, 34.0F, 34.0F), palette, copy_state,
+    DrawCopyButton(graphics, R(246.0F, 15.0F, 32.0F, 34.0F), palette, copy_state,
         hovered == PopupAction::CopySummary, pressed == PopupAction::CopySummary, hover_progress);
-    DrawIconButton(graphics, R(320.0F, 15.0F, 34.0F, 34.0F), palette, false, hovered == PopupAction::Refresh, pressed == PopupAction::Refresh, hover_progress, refreshing ? refresh_angle : 0.0F);
-    DrawIconButton(graphics, R(360.0F, 15.0F, 34.0F, 34.0F), palette, true, hovered == PopupAction::Settings, pressed == PopupAction::Settings, hover_progress, 0.0F);
+    DrawIconButton(graphics, R(284.0F, 15.0F, 32.0F, 34.0F), palette, false, hovered == PopupAction::Refresh, pressed == PopupAction::Refresh, hover_progress, refreshing ? refresh_angle : 0.0F);
+    DrawIconButton(graphics, R(322.0F, 15.0F, 32.0F, 34.0F), palette, true, hovered == PopupAction::Settings, pressed == PopupAction::Settings, hover_progress, 0.0F);
+    DrawCloseButton(graphics, R(360.0F, 15.0F, 32.0F, 34.0F), palette,
+        hovered == PopupAction::Close, pressed == PopupAction::Close, hover_progress);
 
     const bool needs_setup = NeedsProviderSetup(snapshot);
     const UsagePrimaryTarget primary_target = ResolveUsagePrimaryTarget(snapshot);
@@ -810,6 +825,8 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         diagnostics_copied || persistence == SettingsPersistenceState::Saved ? palette.green : palette.muted;
     Text(graphics, feedback, R(408.0F, 25.0F, 260.0F, 28.0F), 11.0F, FontStyleRegular,
         feedback_color, StringAlignmentFar);
+    DrawCloseButton(graphics, R(656.0F, 16.0F, 30.0F, 30.0F), palette,
+        hovered == SettingsAction::Close, pressed == SettingsAction::Close, hover_progress);
 
     FillRounded(graphics, R(20.0F, 78.0F, 172.0F, 584.0F), 12.0F, palette.surface);
     StrokeRounded(graphics, R(20.0F, 78.0F, 172.0F, 584.0F), 12.0F, palette.border);
@@ -1039,14 +1056,16 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
 }
 
 PopupAction HitTestPopup(POINT point, float primary_y) noexcept {
-    if (point.y >= 12 && point.y <= 52 && point.x >= 276 && point.x < 318) return PopupAction::CopySummary;
-    if (point.y >= 12 && point.y <= 52 && point.x >= 318 && point.x < 358) return PopupAction::Refresh;
-    if (point.y >= 12 && point.y <= 52 && point.x >= 358) return PopupAction::Settings;
+    if (point.y >= 12 && point.y <= 52 && point.x >= 242 && point.x < 282) return PopupAction::CopySummary;
+    if (point.y >= 12 && point.y <= 52 && point.x >= 282 && point.x < 320) return PopupAction::Refresh;
+    if (point.y >= 12 && point.y <= 52 && point.x >= 320 && point.x < 358) return PopupAction::Settings;
+    if (point.y >= 12 && point.y <= 52 && point.x >= 358) return PopupAction::Close;
     if (static_cast<float>(point.y) >= primary_y - 6.0F && static_cast<float>(point.y) <= primary_y + 48.0F) return PopupAction::Primary;
     return PopupAction::None;
 }
 
 SettingsAction HitTestSettings(POINT point, SettingsTab tab) noexcept {
+    if (point.x >= 648 && point.y >= 8 && point.y <= 54) return SettingsAction::Close;
     if (point.x >= 28 && point.x <= 184) {
         if (point.y >= 90 && point.y < 138) return SettingsAction::SelectGeneral;
         if (point.y >= 138 && point.y < 184) return SettingsAction::SelectProviders;
@@ -1113,6 +1132,7 @@ const wchar_t* PopupActionHint(PopupAction action, bool chinese, UsagePrimaryTar
         if (refreshing) return T(chinese, L"Queue one more refresh after this one", L"当前完成后再刷新一次");
         return T(chinese, L"Refresh Codex usage now", L"立即刷新 Codex 使用情况");
     case PopupAction::Settings: return T(chinese, L"Open Codex Partner settings", L"打开 Codex Partner 设置");
+    case PopupAction::Close: return T(chinese, L"Close this window", L"关闭此窗口");
     case PopupAction::Primary:
         if (primary_target == UsagePrimaryTarget::ProviderSetup) {
             return T(chinese, L"Open Providers and finish Codex sign-in", L"打开“提供商”并完成 Codex 登录");
@@ -1164,6 +1184,7 @@ const wchar_t* SettingsActionHint(SettingsAction action, bool chinese) noexcept 
     case SettingsAction::ReportIssue: return T(chinese, L"Copy private diagnostics and open a new GitHub issue", L"复制脱敏诊断并打开新的 GitHub 问题表单");
     case SettingsAction::OpenProjectSite: return T(chinese, L"Open Codex Partner on GitHub", L"在 GitHub 打开 Codex Partner 项目");
     case SettingsAction::CopyDiagnostics: return T(chinese, L"Copy a credential-free issue report summary", L"复制不含凭据的问题诊断摘要");
+    case SettingsAction::Close: return T(chinese, L"Close settings", L"关闭设置");
     case SettingsAction::None: return L"";
     }
     return L"";

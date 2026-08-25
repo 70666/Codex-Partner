@@ -146,6 +146,7 @@ long PopupChildId(ui::PopupAction action) noexcept {
     case ui::PopupAction::CopySummary: return 4;
     case ui::PopupAction::Refresh: return 1;
     case ui::PopupAction::Settings: return 2;
+    case ui::PopupAction::Close: return 5;
     case ui::PopupAction::Primary: return 3;
     case ui::PopupAction::None: return 0;
     }
@@ -188,6 +189,7 @@ long SettingsChildId(ui::SettingsTab tab, ui::SettingsAction action) noexcept {
     case ui::SettingsAction::ReportIssue: return 54;
     case ui::SettingsAction::OpenProjectSite: return 51;
     case ui::SettingsAction::CopyDiagnostics: return 52;
+    case ui::SettingsAction::Close: return 61;
     case ui::SettingsAction::None: return 0;
     }
     return 0;

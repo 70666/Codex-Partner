@@ -24,7 +24,7 @@ constexpr int kSettingsWindowHeight = 900;
 constexpr int kFloatBarWindowWidth = 525;
 constexpr int kFloatBarWindowHeight = 95;
 
-enum class PopupAction { None, CopySummary, Refresh, Settings, Primary };
+enum class PopupAction { None, CopySummary, Refresh, Settings, Close, Primary };
 enum class CopySummaryState { Idle, Copied, Failed };
 enum class FloatBarAction { None, OpenPopup, Hide };
 enum class SettingsTab { General, Providers, Notifications, FloatBar, UsageSpend, About };
@@ -55,6 +55,7 @@ enum class SettingsAction {
     ReportIssue,
     OpenProjectSite,
     CopyDiagnostics,
+    Close,
 };
 
 struct PopupLayout {

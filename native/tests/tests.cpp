@@ -775,7 +775,7 @@ int main(int argc, char** argv) {
     Require(codex_partner::ui::StepSettingsAction(SettingsTab::About, SettingsAction::ReportIssue, 1) == SettingsAction::OpenProjectSite,
         "about keyboard order follows the visible report and project actions");
     Require(codex_partner::ui::StepSettingsAction(SettingsTab::About, SettingsAction::OpenProjectSite, 1) == SettingsAction::CopyDiagnostics, "about page exposes safe diagnostics to keyboard users");
-    Require(codex_partner::ui::ShouldDismissPopupOnDeactivate(false, false, false), "ordinary popup deactivation dismisses the tray surface");
+    Require(!codex_partner::ui::ShouldDismissPopupOnDeactivate(false, false, false), "ordinary popup deactivation keeps the inspectable surface visible");
     Require(!codex_partner::ui::ShouldDismissPopupOnDeactivate(true, false, false), "opening settings keeps popup deactivation from racing the new surface");
     Require(!codex_partner::ui::ShouldDismissPopupOnDeactivate(false, true, false), "proof mode remains stable for automation");
     Require(!codex_partner::ui::ShouldDismissPopupOnDeactivate(false, false, true), "second-instance handoff remains visible until acknowledged by user input");
