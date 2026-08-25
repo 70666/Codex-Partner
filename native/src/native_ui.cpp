@@ -471,27 +471,6 @@ void DrawTopProjects(Graphics& graphics, const SpendSummary& spend, const Palett
     }
 }
 
-std::wstring CompactPaceMultiple(const SpendPaceInsight& insight, bool chinese) {
-    if (!insight.multiple) return chinese ? L"近24H 活跃" : L"24H NEW";
-    std::wostringstream output;
-    output << (chinese ? L"近24H " : L"24H ");
-    if (*insight.multiple >= 99.95) output << L"99+";
-    else output << std::fixed << std::setprecision(1) << *insight.multiple;
-    output << L'×';
-    return output.str();
-}
-
-Color SpendPaceColor(const SpendPaceInsight& insight, const Palette& palette) {
-    switch (insight.level) {
-    case SpendPaceLevel::Quiet: return palette.green;
-    case SpendPaceLevel::Typical: return palette.accent;
-    case SpendPaceLevel::Elevated:
-    case SpendPaceLevel::High:
-    case SpendPaceLevel::NewActivity: return palette.yellow;
-    }
-    return palette.muted;
-}
-
 const wchar_t* T(bool chinese, const wchar_t* english, const wchar_t* simplified_chinese) {
     return chinese ? simplified_chinese : english;
 }
@@ -617,6 +596,7 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     float hover_progress, float refresh_angle, bool refresh_queued, GlobalShortcut global_shortcut) {
     const bool refreshing = RefreshIsActive(refresh_phase);
     const bool scanning_spend = refresh_phase == RefreshPhase::ScanningSpend;
+    const PopupLayout layout = ResolvePopupLayout(snapshot);
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -644,18 +624,16 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     const UsageHealth health = DeriveHealth(snapshot, 70.0, 90.0, now);
     const Color health_color = needs_setup ? palette.accent :
         primary_target == UsagePrimaryTarget::RefreshUsage ? palette.yellow : HealthColor(health, palette);
-    const Color hero = light ? Color(255, 239, 247, 255) : Color(255, 28, 51, 70);
-    FillRounded(graphics, R(16.0F, 66.0F, 368.0F, 106.0F), 14.0F, hero);
-    StrokeRounded(graphics, R(16.0F, 66.0F, 368.0F, 106.0F), 14.0F, Color(90, health_color.GetR(), health_color.GetG(), health_color.GetB()));
+    FillRounded(graphics, R(16.0F, 64.0F, 368.0F, 58.0F), 12.0F, palette.surface);
     SolidBrush health_brush(health_color);
-    graphics.FillEllipse(&health_brush, 32.0F, 84.0F, 9.0F, 9.0F);
+    graphics.FillEllipse(&health_brush, 28.0F, 80.0F, 8.0F, 8.0F);
     const std::wstring headline = refresh_queued ?
         T(chinese, L"One more refresh is queued", L"已排队，将再刷新一次") :
         refresh_phase == RefreshPhase::FetchingUsage ? T(chinese, L"Refreshing live limits...", L"正在刷新实时额度…") :
         scanning_spend ? T(chinese, L"Limits ready · analyzing spend", L"额度已更新 · 正在分析费用") :
         needs_setup ? T(chinese, L"Connect Codex to see your headroom", L"连接 Codex，一眼掌握剩余额度") :
         snapshot.stale ? T(chinese, L"Showing last known usage", L"正在显示上次可用数据") : LocalHealthHeadline(health, chinese);
-    Text(graphics, headline, R(49.0F, 76.0F, 300.0F, 27.0F), 14.0F, FontStyleBold, palette.text);
+    Text(graphics, headline, R(44.0F, 67.0F, 320.0F, 25.0F), 13.0F, FontStyleBold, palette.text);
     std::wstring detail;
     if (refresh_queued) detail = T(chinese,
         L"Current work finishes first; one refresh follows.",
@@ -673,59 +651,47 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     else if (snapshot.loading) detail = T(chinese, L"Reading your Codex limits securely.", L"正在安全读取 Codex 额度。");
     else if (pace) detail = LocalPaceDetail(*pace, chinese);
     else detail = chinese ? L"当前最高使用率为 " + Percent(MostConstrainedPercent(snapshot)) + L"。" : L"Your most constrained window is " + Percent(MostConstrainedPercent(snapshot)) + L" used.";
-    Text(graphics, detail, R(32.0F, 105.0F, 330.0F, 23.0F), 11.0F, FontStyleRegular, palette.secondary);
-    const std::wstring freshness = FormatUsageFreshness(snapshot.updated_at, chinese, now);
-    const std::wstring trust_line = needs_setup ?
-        T(chinese, L"No API key needs to be pasted into this app", L"无需向本应用粘贴 API Key") :
-        freshness + T(chinese, L" · local read-only", L" · 本机只读");
-    Text(graphics, trust_line, R(32.0F, 133.0F, 330.0F, 20.0F), 10.0F, FontStyleRegular, palette.muted);
+    Text(graphics, detail, R(44.0F, 91.0F, 320.0F, 20.0F), 9.5F, FontStyleRegular, palette.secondary);
 
     if (needs_setup) {
-        DrawSetupStep(graphics, 188.0F, L"1", T(chinese, L"Sign in with the Codex CLI", L"使用 Codex CLI 登录"),
+        DrawSetupStep(graphics, layout.first_card_y, L"1", T(chinese, L"Sign in with the Codex CLI", L"使用 Codex CLI 登录"),
             T(chinese, L"Open Providers below, then start the guided login in a terminal.",
                 L"点击下方进入“提供商”，再在终端中启动登录引导。"), palette);
-        DrawSetupStep(graphics, 314.0F, L"2", T(chinese, L"Return and refresh", L"返回并刷新"),
+        DrawSetupStep(graphics, layout.second_card_y, L"2", T(chinese, L"Return and refresh", L"返回并刷新"),
             T(chinese, L"Your current and weekly limits will appear here immediately.",
                 L"当前周期和每周额度随后会立即显示在这里。"), palette);
     } else {
-        if (snapshot.session) DrawRateCard(graphics, *snapshot.session, 188.0F, palette, chinese);
-        else DrawRateCard(graphics, RateWindow{L"Session", 0.0, 0, std::nullopt}, 188.0F, palette, chinese);
-        if (snapshot.weekly) DrawRateCard(graphics, *snapshot.weekly, 314.0F, palette, chinese);
-        else DrawRateCard(graphics, RateWindow{L"Weekly", 0.0, 0, std::nullopt}, 314.0F, palette, chinese);
+        float card_y = layout.first_card_y;
+        if (snapshot.session) {
+            DrawRateCard(graphics, *snapshot.session, card_y, palette, chinese);
+            card_y = layout.second_card_y;
+        }
+        if (snapshot.weekly) DrawRateCard(graphics, *snapshot.weekly, card_y, palette, chinese);
     }
 
-    FillRounded(graphics, R(16.0F, 442.0F, 368.0F, 72.0F), 11.0F, palette.surface);
-    StrokeRounded(graphics, R(16.0F, 442.0F, 368.0F, 72.0F), 11.0F, palette.border);
+    FillRounded(graphics, R(16.0F, layout.spend_y, 368.0F, 72.0F), 11.0F, palette.surface);
+    StrokeRounded(graphics, R(16.0F, layout.spend_y, 368.0F, 72.0F), 11.0F, palette.border);
     const SpendSummary empty_spend;
     const SpendSummary& spend = snapshot.spend.value_or(empty_spend);
-    std::wstring spend_title;
-    if (scanning_spend) {
-        spend_title = T(chinese, L"UPDATING LOCAL ESTIMATE...", L"正在更新本地费用估算…");
-    } else if (spend.stale) {
-        spend_title = T(chinese, L"LOCAL API EQUIVALENT (CACHED)", L"本地 API 等价费用（上次数据）");
-    } else if (const auto coverage = SpendTokenCoveragePercent(spend); spend.partial && coverage) {
-        spend_title = T(chinese, L"KNOWN API FLOOR · ", L"已知 API 等价下限 · ") +
-            std::to_wstring(*coverage) + T(chinese, L"% TOKENS PRICED", L"% TOKEN 已计价");
-    } else {
-        spend_title = T(chinese, L"LOCAL API EQUIVALENT (EST.)", L"本地 API 等价费用（估算）");
+    std::wstring spend_title = scanning_spend ? T(chinese, L"UPDATING ESTIMATE…", L"正在更新费用估算…") :
+        spend.stale ? T(chinese, L"API-EQUIVALENT ESTIMATE · CACHED", L"API 等价费用估算 · 上次数据") :
+        T(chinese, L"API-EQUIVALENT ESTIMATE", L"API 等价费用估算");
+    if (const auto coverage = SpendTokenCoveragePercent(spend); coverage && spend.partial) {
+        spend_title += L" · " + std::to_wstring(*coverage) + T(chinese, L"% priced", L"% 已计价");
     }
-    Text(graphics, spend_title, R(30.0F, 449.0F, 250.0F, 17.0F), 9.0F, FontStyleBold,
+    Text(graphics, spend_title, R(30.0F, layout.spend_y + 7.0F, 330.0F, 17.0F), 9.0F, FontStyleBold,
         scanning_spend || spend.stale || spend.partial ? palette.yellow : palette.muted);
-    if (const auto spend_pace = DeriveSpendPaceInsight(spend)) {
-        Text(graphics, CompactPaceMultiple(*spend_pace, chinese), R(282.0F, 449.0F, 88.0F, 17.0F),
-            9.0F, FontStyleBold, SpendPaceColor(*spend_pace, palette), StringAlignmentFar);
-    }
     const std::array labels{T(chinese, L"1 day", L"近 1 天"), T(chinese, L"7 days", L"近 7 天"), T(chinese, L"30 days", L"近 30 天")};
     const std::array values{spend.one_day_usd, spend.seven_day_usd, spend.thirty_day_usd};
     const std::array partial_windows{spend.one_day_partial, spend.seven_day_partial, spend.thirty_day_partial};
     for (std::size_t index = 0; index < labels.size(); ++index) {
         const float x = 30.0F + static_cast<float>(index) * 112.0F;
-        Text(graphics, labels[index], R(x, 469.0F, 96.0F, 16.0F), 9.0F, FontStyleRegular, palette.secondary);
-        Text(graphics, FormatSpendUsd(values[index], partial_windows[index]), R(x, 485.0F, 96.0F, 23.0F), 13.0F, FontStyleBold, values[index] ? palette.text : palette.muted);
+        Text(graphics, labels[index], R(x, layout.spend_y + 27.0F, 96.0F, 16.0F), 9.0F, FontStyleRegular, palette.secondary);
+        Text(graphics, FormatSpendUsd(values[index], partial_windows[index]), R(x, layout.spend_y + 43.0F, 96.0F, 23.0F), 13.0F, FontStyleBold, values[index] ? palette.text : palette.muted);
     }
 
-    RectF primary = R(16.0F, 532.0F, 368.0F, 42.0F);
-    if (pressed == PopupAction::Primary) primary = R(17.0F, 533.0F, 366.0F, 40.0F);
+    RectF primary = R(16.0F, layout.primary_y, 368.0F, 42.0F);
+    if (pressed == PopupAction::Primary) primary = R(17.0F, layout.primary_y + 1.0F, 366.0F, 40.0F);
     const bool primary_hovered = hovered == PopupAction::Primary;
     FillRounded(graphics, primary, 9.0F,
         Blend(palette.surface, palette.accent_soft, primary_hovered ? hover_progress * 0.55F : 0.28F));
@@ -737,25 +703,11 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
             (refresh_queued ? T(chinese, L"Codex refresh queued…", L"Codex 刷新已排队…") :
             refreshing ? T(chinese, L"Refreshing Codex usage…", L"正在重新连接 Codex…") :
                 T(chinese, L"Retry Codex refresh now  >", L"立即重试 Codex 刷新  >")) :
-            T(chinese, L"View detailed analytics  >", L"查看详细分析  >");
+            T(chinese, L"Detailed analytics", L"详细分析");
     Text(graphics, primary_label,
-        R(30.0F, 532.0F, 324.0F, 42.0F), 12.0F, FontStyleBold, palette.accent, StringAlignmentCenter);
+        R(30.0F, layout.primary_y, 324.0F, 42.0F), 12.0F, FontStyleBold, palette.accent, StringAlignmentCenter);
     static_cast<void>(external_feedback);
-    const std::wstring idle_hint = global_shortcut == GlobalShortcut::Disabled ?
-        T(chinese, L"Drag · Tab · F5 refresh · Ctrl+C copy · Esc", L"拖动 · Tab · F5 刷新 · Ctrl+C 复制 · Esc") :
-        std::wstring(GlobalShortcutLabel(global_shortcut)) +
-            T(chinese, L" quick peek · F5 refresh · Ctrl+C copy", L" 快速查看 · F5 刷新 · Ctrl+C 复制");
-    const std::wstring hint = hovered != PopupAction::None ? PopupActionHint(hovered, chinese, primary_target, refreshing, refresh_queued) :
-        copy_state == CopySummaryState::Copied ? T(chinese, L"Usage summary copied · ready to paste", L"使用摘要已复制 · 可直接粘贴") :
-        copy_state == CopySummaryState::Failed ? T(chinese, L"Couldn't copy · clipboard may be busy", L"复制失败 · 剪贴板可能正被占用") :
-        refresh_queued ? T(chinese, L"Request accepted · one trailing refresh", L"请求已接受 · 完成后再刷新一次") :
-        scanning_spend ? T(chinese, L"Live limits ready · local spend scan continues", L"实时额度已就绪 · 本地费用扫描仍在继续") :
-        idle_hint;
-    const Color hint_color = hovered != PopupAction::None ? palette.accent :
-        copy_state == CopySummaryState::Copied ? palette.green :
-        copy_state == CopySummaryState::Failed ? palette.red : refresh_queued ? palette.accent :
-        scanning_spend ? palette.yellow : palette.muted;
-    Text(graphics, hint, R(20.0F, 594.0F, 360.0F, 24.0F), 10.0F, FontStyleRegular, hint_color, StringAlignmentCenter);
+    static_cast<void>(global_shortcut);
 }
 
 void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese,
@@ -1086,11 +1038,11 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     Text(graphics, settings_hint, R(220.0F, 700.0F, 440.0F, 18.0F), 9.0F, FontStyleRegular, hovered == SettingsAction::None ? palette.muted : palette.accent, StringAlignmentCenter);
 }
 
-PopupAction HitTestPopup(POINT point) noexcept {
+PopupAction HitTestPopup(POINT point, float primary_y) noexcept {
     if (point.y >= 12 && point.y <= 52 && point.x >= 276 && point.x < 318) return PopupAction::CopySummary;
     if (point.y >= 12 && point.y <= 52 && point.x >= 318 && point.x < 358) return PopupAction::Refresh;
     if (point.y >= 12 && point.y <= 52 && point.x >= 358) return PopupAction::Settings;
-    if (point.y >= 526 && point.y <= 580) return PopupAction::Primary;
+    if (static_cast<float>(point.y) >= primary_y - 6.0F && static_cast<float>(point.y) <= primary_y + 48.0F) return PopupAction::Primary;
     return PopupAction::None;
 }
 

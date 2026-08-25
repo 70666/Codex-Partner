@@ -736,6 +736,18 @@ int main(int argc, char** argv) {
     using codex_partner::ui::PopupAction;
     using codex_partner::ui::SettingsAction;
     using codex_partner::ui::SettingsTab;
+    codex_partner::UsageSnapshot popup_layout_snapshot;
+    popup_layout_snapshot.connection = codex_partner::ProviderConnectionState::CredentialsDetected;
+    popup_layout_snapshot.weekly = codex_partner::RateWindow{L"Weekly", 36.0, 10080, std::nullopt};
+    const auto weekly_only_layout = codex_partner::ui::ResolvePopupLayout(popup_layout_snapshot);
+    Require(weekly_only_layout.second_card_y < 0.0F && weekly_only_layout.spend_y == 256.0F &&
+            weekly_only_layout.content_height == 400,
+        "missing current-cycle data removes the fake zero-percent card and compacts the popup");
+    popup_layout_snapshot.session = codex_partner::RateWindow{L"Session", 18.0, 300, std::nullopt};
+    const auto two_window_layout = codex_partner::ui::ResolvePopupLayout(popup_layout_snapshot);
+    Require(two_window_layout.second_card_y == 254.0F && two_window_layout.spend_y == 376.0F &&
+            two_window_layout.content_height == 520,
+        "two real quota windows retain separate readable cards without changing the information order");
     Require(codex_partner::ui::StepPopupAction(PopupAction::None, 1) == PopupAction::CopySummary, "popup keyboard focus starts at the leftmost copy action");
     Require(codex_partner::ui::StepPopupAction(PopupAction::CopySummary, 1) == PopupAction::Refresh, "popup keyboard focus follows visual header order");
     Require(codex_partner::ui::StepPopupAction(PopupAction::Primary, 1) == PopupAction::CopySummary, "popup keyboard focus wraps forward");

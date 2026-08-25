@@ -198,6 +198,7 @@ std::vector<Element> BuildPopupElements(const UsageSnapshot& snapshot, bool chin
     ui::PopupAction pressed, bool refresh_queued) {
     const bool refreshing = RefreshIsActive(refresh_phase);
     const bool scanning_spend = refresh_phase == RefreshPhase::ScanningSpend;
+    const ui::PopupLayout layout = ui::ResolvePopupLayout(snapshot);
     std::vector<Element> elements;
     elements.reserve(9);
     const bool copied = copy_state == ui::CopySummaryState::Copied;
@@ -230,7 +231,7 @@ std::vector<Element> BuildPopupElements(const UsageSnapshot& snapshot, bool chin
     static_cast<void>(external_feedback);
     const bool retry = primary_target == UsagePrimaryTarget::RefreshUsage;
     elements.push_back(ActionElement(3, Role::PushButton,
-        {16, 526, 368, 54},
+        {16, static_cast<int>(layout.primary_y - 6.0F), 368, 54},
         primary_target == UsagePrimaryTarget::ProviderSetup ?
             T(chinese, L"Set up Codex in Providers", L"前往提供商连接 Codex") :
         retry ? (refresh_queued ? T(chinese, L"Codex refresh queued", L"Codex 刷新已排队") :
@@ -261,11 +262,19 @@ std::vector<Element> BuildPopupElements(const UsageSnapshot& snapshot, bool chin
     status += T(chinese, L". ", L"。") + FormatUsageFreshness(snapshot.updated_at, chinese);
     if (identity_hidden) status += T(chinese, L". Identity hidden by privacy setting", L"。身份信息已按隐私设置隐藏");
     else if (!snapshot.plan.empty()) status += L", " + snapshot.plan;
-    elements.push_back(StaticElement(10, {16, 66, 368, 106}, T(chinese, L"Codex status", L"Codex 状态"), status));
-    elements.push_back(StaticElement(11, {16, 188, 368, 126}, T(chinese, L"Current session", L"当前周期"), WindowValue(snapshot.session, chinese)));
-    elements.push_back(StaticElement(12, {16, 314, 368, 126}, T(chinese, L"Weekly capacity", L"每周额度"), WindowValue(snapshot.weekly, chinese)));
+    elements.push_back(StaticElement(10, {16, 64, 368, 58}, T(chinese, L"Codex status", L"Codex 状态"), status));
+    float card_y = layout.first_card_y;
+    if (snapshot.session) {
+        elements.push_back(StaticElement(11, {16, static_cast<int>(card_y), 368, 112},
+            T(chinese, L"Current session", L"当前周期"), WindowValue(snapshot.session, chinese)));
+        card_y = layout.second_card_y;
+    }
+    if (snapshot.weekly) {
+        elements.push_back(StaticElement(12, {16, static_cast<int>(card_y), 368, 112},
+            T(chinese, L"Weekly capacity", L"每周额度"), WindowValue(snapshot.weekly, chinese)));
+    }
     const SpendSummary empty;
-    elements.push_back(StaticElement(13, {16, 442, 368, 72}, T(chinese, L"Local API-equivalent spend estimate", L"本地 API 等价费用估算"),
+    elements.push_back(StaticElement(13, {16, static_cast<int>(layout.spend_y), 368, 72}, T(chinese, L"Local API-equivalent spend estimate", L"本地 API 等价费用估算"),
         SpendValue(snapshot.spend.value_or(empty), chinese), scanning_spend ?
             T(chinese, L"Local logs are still being scanned; the latest estimate remains visible", L"本地日志仍在扫描；最近一次估算继续显示") :
             T(chinese, L"This is an estimate, not a subscription invoice", L"这是估算值，不是订阅账单")));

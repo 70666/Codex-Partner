@@ -768,8 +768,12 @@ void App::ShowPopup() {
     MONITORINFO info{sizeof(info)};
     if (!GetMonitorInfoW(monitor, &info)) return;
     const UINT target_dpi = EffectiveDpiForMonitor(monitor);
+    const UsageSnapshot snapshot = SnapshotCopy();
+    const ui::PopupLayout popup_layout = ui::ResolvePopupLayout(snapshot);
     const int client_width = MulDiv(ui::kPopupWindowWidth, static_cast<int>(target_dpi), 96);
-    const int client_height = MulDiv(ui::kPopupWindowHeight, static_cast<int>(target_dpi), 96);
+    const int logical_window_height = static_cast<int>(
+        std::lround(static_cast<float>(popup_layout.content_height) * ui::kContentScale));
+    const int client_height = MulDiv(logical_window_height, static_cast<int>(target_dpi), 96);
     const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(popup_, GWL_STYLE));
     const DWORD extended_style = static_cast<DWORD>(GetWindowLongPtrW(popup_, GWL_EXSTYLE));
     const SIZE outer_size = WindowSizeForClient(
@@ -1497,8 +1501,14 @@ void App::TickFloatBarHoverAnimation() {
 }
 
 void App::ApplyTheme(HWND window) const {
-    const BOOL dark = ShouldUseLightTheme(settings_.theme) ? FALSE : TRUE;
+    const bool light = ShouldUseLightTheme(settings_.theme);
+    const BOOL dark = light ? FALSE : TRUE;
     DwmSetWindowAttribute(window, 20, &dark, sizeof(dark));
+    const COLORREF caption = light ? RGB(246, 248, 251) : RGB(24, 25, 28);
+    const COLORREF caption_text = light ? RGB(28, 31, 36) : RGB(244, 245, 247);
+    DwmSetWindowAttribute(window, 34, &caption, sizeof(caption));
+    DwmSetWindowAttribute(window, 35, &caption, sizeof(caption));
+    DwmSetWindowAttribute(window, 36, &caption_text, sizeof(caption_text));
 }
 
 bool App::SaveSettings() {
@@ -1867,14 +1877,16 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             static_cast<float>(MulDiv(point.x, 96, static_cast<int>(dpi))) / ui::kContentScale));
         point.y = static_cast<LONG>(std::lround(
             static_cast<float>(MulDiv(point.y, 96, static_cast<int>(dpi))) / ui::kContentScale));
-        if (point.y >= 0 && point.y < 62 && ui::HitTestPopup(point) == ui::PopupAction::None) return HTCAPTION;
+        if (point.y >= 0 && point.y < 62 && ui::HitTestPopup(
+            point, ui::ResolvePopupLayout(SnapshotCopy()).primary_y) == ui::PopupAction::None) return HTCAPTION;
         return HTCLIENT;
     }
     case WM_NCLBUTTONDOWN:
         popup_activation_handoff_pending_ = false;
         return DefWindowProcW(window, message, wparam, lparam);
     case WM_MOUSEMOVE: {
-        const ui::PopupAction action = ui::HitTestPopup(LogicalPoint(window, lparam));
+        const ui::PopupAction action = ui::HitTestPopup(
+            LogicalPoint(window, lparam), ui::ResolvePopupLayout(SnapshotCopy()).primary_y);
         SetPopupHover(action);
         SetCursor(LoadCursorW(nullptr, action == ui::PopupAction::None ? IDC_ARROW : IDC_HAND));
         if (!popup_tracking_mouse_) {
@@ -1890,7 +1902,8 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         return 0;
     case WM_LBUTTONDOWN:
         popup_activation_handoff_pending_ = false;
-        popup_pressed_ = ui::HitTestPopup(LogicalPoint(window, lparam));
+        popup_pressed_ = ui::HitTestPopup(
+            LogicalPoint(window, lparam), ui::ResolvePopupLayout(SnapshotCopy()).primary_y);
         if (popup_pressed_ != ui::PopupAction::None) {
             SetFocus(window);
             SetPopupAccessibleFocus(popup_pressed_);
@@ -1899,7 +1912,8 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         InvalidateRect(window, nullptr, FALSE);
         return 0;
     case WM_LBUTTONUP: {
-        const ui::PopupAction action = ui::HitTestPopup(LogicalPoint(window, lparam));
+        const ui::PopupAction action = ui::HitTestPopup(
+            LogicalPoint(window, lparam), ui::ResolvePopupLayout(SnapshotCopy()).primary_y);
         const bool activate = action != ui::PopupAction::None && action == popup_pressed_;
         if (GetCapture() == window) ReleaseCapture();
         if (!activate) {

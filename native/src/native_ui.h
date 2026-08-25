@@ -11,14 +11,14 @@
 namespace codex_partner::ui {
 
 constexpr int kPopupWidth = 400;
-constexpr int kPopupHeight = 640;
+constexpr int kPopupHeight = 520;
 constexpr int kSettingsWidth = 700;
 constexpr int kSettingsHeight = 720;
 constexpr int kFloatBarWidth = 420;
 constexpr int kFloatBarHeight = 76;
 constexpr float kContentScale = 1.25F;
 constexpr int kPopupWindowWidth = 500;
-constexpr int kPopupWindowHeight = 800;
+constexpr int kPopupWindowHeight = 650;
 constexpr int kSettingsWindowWidth = 875;
 constexpr int kSettingsWindowHeight = 900;
 constexpr int kFloatBarWindowWidth = 525;
@@ -57,10 +57,35 @@ enum class SettingsAction {
     CopyDiagnostics,
 };
 
+struct PopupLayout {
+    float first_card_y = 134.0F;
+    float second_card_y = -1.0F;
+    float spend_y = 256.0F;
+    float primary_y = 338.0F;
+    int content_height = 400;
+};
+
 void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, CopySummaryState copy_state, ExternalActionFeedback external_feedback, PopupAction hovered, PopupAction pressed, float hover_progress, float refresh_angle, bool refresh_queued = false, GlobalShortcut global_shortcut = GlobalShortcut::CtrlShiftU);
 void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress);
 void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const UsageSnapshot& snapshot, const UpdateCheckState& update, SettingsTab tab, bool light, bool chinese, SettingsPersistenceState persistence, bool diagnostics_copied, ExternalActionFeedback external_feedback, RefreshPhase refresh_phase, SettingsAction hovered, SettingsAction pressed, float hover_progress, GlobalShortcutStatus global_shortcut_status = GlobalShortcutStatus::Registered, std::optional<std::size_t> usage_chart_hover = std::nullopt, float usage_chart_progress = 1.0F);
-[[nodiscard]] PopupAction HitTestPopup(POINT logical) noexcept;
+[[nodiscard]] inline PopupLayout ResolvePopupLayout(const UsageSnapshot& snapshot) noexcept {
+    PopupLayout layout;
+    const bool setup = NeedsProviderSetup(snapshot);
+    const int card_count = setup ? 2 : static_cast<int>(snapshot.session.has_value()) +
+        static_cast<int>(snapshot.weekly.has_value());
+    if (card_count >= 2) {
+        layout.second_card_y = 254.0F;
+        layout.spend_y = 376.0F;
+        layout.primary_y = 458.0F;
+        layout.content_height = 520;
+    } else if (card_count == 0) {
+        layout.spend_y = 134.0F;
+        layout.primary_y = 216.0F;
+        layout.content_height = 278;
+    }
+    return layout;
+}
+[[nodiscard]] PopupAction HitTestPopup(POINT logical, float primary_y = 458.0F) noexcept;
 [[nodiscard]] FloatBarAction HitTestFloatBar(POINT logical) noexcept;
 [[nodiscard]] SettingsAction HitTestSettings(POINT logical, SettingsTab tab) noexcept;
 [[nodiscard]] std::optional<std::size_t> HitTestUsageChart(POINT logical) noexcept;
