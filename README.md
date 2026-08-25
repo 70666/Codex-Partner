@@ -1,5 +1,7 @@
 <div align="center">
 
+简体中文 · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
 # Codex Partner
 
 **把 Codex 的额度、重置时间和本地使用成本，安静地放进 Windows 托盘。**
