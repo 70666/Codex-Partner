@@ -62,16 +62,6 @@ float Scale(HWND window) {
 
 RectF R(float x, float y, float width, float height) { return RectF(x, y, width, height); }
 
-// The original compact type ramp was technically DPI-aware, but several
-// secondary labels still landed below a comfortable reading size on dense
-// laptop displays. Give the smallest text the largest lift while preserving
-// the visual hierarchy and the existing card geometry.
-float ReadableFontSize(float size) noexcept {
-    if (size < 11.0F) return size + 1.5F;
-    if (size < 16.0F) return size + 1.0F;
-    return size + 0.5F;
-}
-
 std::unique_ptr<GraphicsPath> RoundedPath(const RectF& rect, float radius) {
     auto path = std::make_unique<GraphicsPath>(FillModeAlternate);
     const float diameter = radius * 2.0F;
@@ -97,7 +87,7 @@ void StrokeRounded(Graphics& graphics, const RectF& rect, float radius, const Co
 
 void Text(Graphics& graphics, const std::wstring& value, const RectF& rect, float size, FontStyle style, const Color& color, StringAlignment alignment = StringAlignmentNear) {
     FontFamily family(L"Segoe UI");
-    Font font(&family, ReadableFontSize(size), style, UnitPixel);
+    Font font(&family, size, style, UnitPixel);
     SolidBrush brush(color);
     StringFormat format;
     format.SetTrimming(StringTrimmingEllipsisCharacter);
@@ -109,7 +99,7 @@ void Text(Graphics& graphics, const std::wstring& value, const RectF& rect, floa
 
 void TextWrapped(Graphics& graphics, const std::wstring& value, const RectF& rect, float size, FontStyle style, const Color& color) {
     FontFamily family(L"Segoe UI");
-    Font font(&family, ReadableFontSize(size), style, UnitPixel);
+    Font font(&family, size, style, UnitPixel);
     SolidBrush brush(color);
     StringFormat format;
     format.SetTrimming(StringTrimmingEllipsisWord);
@@ -355,10 +345,10 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
     const RectF plot{232.0F, 322.0F, 418.0F, 116.0F};
     FillRounded(graphics, card, 12.0F, palette.surface);
     StrokeRounded(graphics, card, 12.0F, palette.border);
-    Text(graphics, T(chinese, L"MODEL ACTIVITY · 30 DAYS", L"模型活动 · 近 30 天"),
+    Text(graphics, T(chinese, L"CODEX LOG ATTRIBUTION · 30 DAYS", L"CODEX 日志归因 · 近 30 天"),
         R(232.0F, 270.0F, 250.0F, 20.0F), 10.0F, FontStyleBold, palette.muted);
-    Text(graphics, T(chinese, L"Hover for usage count and API-equivalent value", L"悬停查看使用次数与 API 等价费用"),
-        R(232.0F, 291.0F, 330.0F, 18.0F), 9.0F, FontStyleRegular, palette.secondary);
+    Text(graphics, T(chinese, L"Includes automatic routing and background tasks", L"包含自动路由和后台任务，并非手动选择记录"),
+        R(232.0F, 291.0F, 400.0F, 18.0F), 9.0F, FontStyleRegular, palette.secondary);
 
     const auto series = BuildChartSeries(spend);
     const std::array<Color, 4> fills{Color(174, 27, 92, 214), Color(168, 47, 128, 237),
@@ -427,7 +417,7 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
     marker.SetDashStyle(DashStyleDash);
     graphics.DrawLine(&marker, marker_x, plot.Y, marker_x, plot.GetBottom());
 
-    const float tooltip_width = 236.0F;
+    const float tooltip_width = 300.0F;
     const float tooltip_height = 42.0F + 22.0F * static_cast<float>(series.size());
     const float tooltip_x = marker_x > plot.X + plot.Width * 0.56F ? marker_x - tooltip_width - 8.0F : marker_x + 8.0F;
     const float tooltip_y = 312.0F;
@@ -439,12 +429,12 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
         const float y = tooltip_y + 34.0F + static_cast<float>(index) * 22.0F;
         SolidBrush dot(strokes[index]);
         graphics.FillEllipse(&dot, tooltip_x + 12.0F, y + 7.0F, 7.0F, 7.0F);
-        Text(graphics, WideUtf8(series[index].model), R(tooltip_x + 25.0F, y, 100.0F, 20.0F),
+        Text(graphics, WideUtf8(series[index].model), R(tooltip_x + 25.0F, y, 112.0F, 20.0F),
             9.0F, FontStyleRegular, palette.text);
-        std::wstring detail = std::to_wstring(series[index].usage[day]) + T(chinese, L" uses · ", L" 次 · ");
+        std::wstring detail = std::to_wstring(series[index].usage[day]) + T(chinese, L" log events · ", L" 个日志事件 · ");
         const std::optional<double> cost = series[index].cost[day];
         detail += FormatSpendUsd(cost, series[index].partial[day]);
-        Text(graphics, detail, R(tooltip_x + 120.0F, y, tooltip_width - 132.0F, 20.0F),
+        Text(graphics, detail, R(tooltip_x + 136.0F, y, tooltip_width - 148.0F, 20.0F),
             8.5F, FontStyleRegular, series[index].partial[day] ? palette.yellow : palette.secondary, StringAlignmentFar);
     }
 }
@@ -597,7 +587,7 @@ void DrawSpendMetric(Graphics& graphics, float x, float y, float width, const wc
     FontFamily family(L"Segoe UI");
     RectF measured;
     while (amount_size > 13.0F) {
-        Font font(&family, ReadableFontSize(amount_size), FontStyleBold, UnitPixel);
+        Font font(&family, amount_size, FontStyleBold, UnitPixel);
         graphics.MeasureString(formatted.c_str(), static_cast<INT>(formatted.size()), &font, PointF{}, &measured);
         if (measured.Width <= width - 28.0F) break;
         amount_size -= 1.0F;
@@ -631,7 +621,7 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-    graphics.ScaleTransform(scale, scale);
+    graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
     SolidBrush background(palette.background);
     graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight));
@@ -774,7 +764,7 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-    graphics.ScaleTransform(scale, scale);
+    graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
     const auto pace = MostUrgentPaceForecast(snapshot);
     SolidBrush background(palette.background);
@@ -841,7 +831,7 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-    graphics.ScaleTransform(scale, scale);
+    graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
     SolidBrush background(palette.background);
     graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kSettingsWidth), static_cast<float>(kSettingsHeight));
@@ -980,10 +970,6 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         DrawSpendMetric(graphics, 214.0F, 142.0F, 142.0F, T(chinese, L"LAST 1 DAY", L"近 1 天"), spend.one_day_usd, spend.one_day_partial, palette, chinese);
         DrawSpendMetric(graphics, 370.0F, 142.0F, 142.0F, T(chinese, L"LAST 7 DAYS", L"近 7 天"), spend.seven_day_usd, spend.seven_day_partial, palette, chinese);
         DrawSpendMetric(graphics, 526.0F, 142.0F, 142.0F, T(chinese, L"LAST 30 DAYS", L"近 30 天"), spend.thirty_day_usd, spend.thirty_day_partial, palette, chinese);
-        if (const auto spend_pace = DeriveSpendPaceInsight(spend)) {
-            Text(graphics, FormatSpendPaceInsight(spend, chinese, true), R(218.0F, 244.0F, 440.0F, 20.0F),
-                9.0F, FontStyleBold, SpendPaceColor(*spend_pace, palette));
-        }
         DrawUsageWaveChart(graphics, spend, palette, chinese, usage_chart_hover, usage_chart_progress);
         DrawTopProjects(graphics, spend, palette, chinese, settings.hide_identity);
         std::wstring coverage;

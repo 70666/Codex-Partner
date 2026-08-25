@@ -422,13 +422,13 @@ std::vector<Element> BuildSettingsElements(const AppSettings& settings, const Us
             }
         }
         std::wstring chart_value = std::to_wstring(model_uses) +
-            T(chinese, L" uses across ", L" 次使用，覆盖 ") +
+            T(chinese, L" attributed log events across ", L" 个归因日志事件，覆盖 ") +
             std::to_wstring(spend.daily_model_usage.size()) + T(chinese, L" active days, ", L" 个活跃日，") +
             Money(model_cost, spend.partial, chinese);
         elements.push_back(StaticElement(41, {214, 258, 454, 216},
-            T(chinese, L"30-day model activity chart", L"30 天模型活动曲线"), std::move(chart_value),
-            T(chinese, L"Move the pointer across the chart to inspect each model's uses and estimated amount by day",
-                L"在曲线上移动鼠标，可查看每天各模型的使用次数和估算金额")));
+            T(chinese, L"30-day Codex log attribution chart", L"30 天 Codex 日志归因曲线"), std::move(chart_value),
+            T(chinese, L"Model names come from local Codex logs and can include automatic routing and background tasks; move the pointer across the chart to inspect each day's attributed events and estimated amount",
+                L"模型名称来自本地 Codex 日志，可能包含自动路由和后台任务；在曲线上移动鼠标可查看每天的归因事件和估算金额")));
         std::wstring projects_value;
         for (std::size_t index = 0; index < spend.top_projects.size(); ++index) {
             const auto& project = spend.top_projects[index];

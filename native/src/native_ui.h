@@ -16,6 +16,13 @@ constexpr int kSettingsWidth = 700;
 constexpr int kSettingsHeight = 720;
 constexpr int kFloatBarWidth = 420;
 constexpr int kFloatBarHeight = 76;
+constexpr float kContentScale = 1.25F;
+constexpr int kPopupWindowWidth = 500;
+constexpr int kPopupWindowHeight = 800;
+constexpr int kSettingsWindowWidth = 875;
+constexpr int kSettingsWindowHeight = 900;
+constexpr int kFloatBarWindowWidth = 525;
+constexpr int kFloatBarWindowHeight = 95;
 
 enum class PopupAction { None, CopySummary, Refresh, Settings, Primary };
 enum class CopySummaryState { Idle, Copied, Failed };

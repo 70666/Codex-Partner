@@ -120,7 +120,8 @@ bool CopyTextToClipboard(HWND owner, std::wstring_view text) {
 
 POINT SelectorMenuAnchor(HWND owner, int logical_y) {
     const UINT dpi = GetDpiForWindow(owner);
-    POINT point{MulDiv(648, static_cast<int>(dpi), 96), MulDiv(logical_y, static_cast<int>(dpi), 96)};
+    POINT point{MulDiv(static_cast<int>(648.0F * ui::kContentScale), static_cast<int>(dpi), 96),
+        MulDiv(static_cast<int>(static_cast<float>(logical_y) * ui::kContentScale), static_cast<int>(dpi), 96)};
     ClientToScreen(owner, &point);
     return point;
 }
@@ -591,22 +592,22 @@ bool App::CreateWindows() {
     const DWORD popup_style = proof_surface.starts_with(L"popup") ?
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE : WS_POPUP;
     const SIZE popup_size = WindowSizeForClient(
-        MulDiv(ui::kPopupWidth, static_cast<int>(dpi), 96),
-        MulDiv(ui::kPopupHeight, static_cast<int>(dpi), 96),
+        MulDiv(ui::kPopupWindowWidth, static_cast<int>(dpi), 96),
+        MulDiv(ui::kPopupWindowHeight, static_cast<int>(dpi), 96),
         popup_style, popup_extended_style, dpi);
     popup_ = CreateWindowExW(popup_extended_style, kPopupClass, L"Codex Partner", popup_style, CW_USEDEFAULT, CW_USEDEFAULT,
         popup_size.cx, popup_size.cy, nullptr, nullptr, instance_, this);
     if (!popup_) return false;
     SetRoundedCorners(popup_);
 
-    RECT settings_rect{0, 0, MulDiv(ui::kSettingsWidth, static_cast<int>(dpi), 96), MulDiv(ui::kSettingsHeight, static_cast<int>(dpi), 96)};
+    RECT settings_rect{0, 0, MulDiv(ui::kSettingsWindowWidth, static_cast<int>(dpi), 96), MulDiv(ui::kSettingsWindowHeight, static_cast<int>(dpi), 96)};
     AdjustWindowRectExForDpi(&settings_rect, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, 0, dpi);
     const DWORD settings_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | (proof_surface.starts_with(L"settings") ? WS_VISIBLE : 0U);
     settings_window_ = CreateWindowExW(0, kSettingsClass, ShouldUseChinese(settings_.language) ? L"Codex Partner 设置" : L"Codex Partner Settings", settings_style, CW_USEDEFAULT, CW_USEDEFAULT, settings_rect.right - settings_rect.left, settings_rect.bottom - settings_rect.top, nullptr, nullptr, instance_, this);
     if (!settings_window_) return false;
 
-    const int float_bar_width = MulDiv(ui::kFloatBarWidth, static_cast<int>(dpi), 96);
-    const int float_bar_height = MulDiv(ui::kFloatBarHeight, static_cast<int>(dpi), 96);
+    const int float_bar_width = MulDiv(ui::kFloatBarWindowWidth, static_cast<int>(dpi), 96);
+    const int float_bar_height = MulDiv(ui::kFloatBarWindowHeight, static_cast<int>(dpi), 96);
     const DWORD float_bar_extended_style = WS_EX_TOPMOST | (proof_surface.starts_with(L"floatbar") ? WS_EX_APPWINDOW : WS_EX_TOOLWINDOW);
     const DWORD float_bar_style = WS_POPUP | (proof_surface.starts_with(L"floatbar") ? WS_VISIBLE : 0U);
     float_bar_window_ = CreateWindowExW(float_bar_extended_style, kFloatBarClass,
@@ -767,8 +768,8 @@ void App::ShowPopup() {
     MONITORINFO info{sizeof(info)};
     if (!GetMonitorInfoW(monitor, &info)) return;
     const UINT target_dpi = EffectiveDpiForMonitor(monitor);
-    const int client_width = MulDiv(ui::kPopupWidth, static_cast<int>(target_dpi), 96);
-    const int client_height = MulDiv(ui::kPopupHeight, static_cast<int>(target_dpi), 96);
+    const int client_width = MulDiv(ui::kPopupWindowWidth, static_cast<int>(target_dpi), 96);
+    const int client_height = MulDiv(ui::kPopupWindowHeight, static_cast<int>(target_dpi), 96);
     const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(popup_, GWL_STYLE));
     const DWORD extended_style = static_cast<DWORD>(GetWindowLongPtrW(popup_, GWL_EXSTYLE));
     const SIZE outer_size = WindowSizeForClient(
@@ -845,8 +846,8 @@ void App::ShowFloatBar(bool activate) {
     int height = current.bottom - current.top;
     if (width <= 0 || height <= 0) {
         const UINT dpi = GetDpiForSystem();
-        width = MulDiv(ui::kFloatBarWidth, static_cast<int>(dpi), 96);
-        height = MulDiv(ui::kFloatBarHeight, static_cast<int>(dpi), 96);
+        width = MulDiv(ui::kFloatBarWindowWidth, static_cast<int>(dpi), 96);
+        height = MulDiv(ui::kFloatBarWindowHeight, static_cast<int>(dpi), 96);
     }
 
     HMONITOR monitor = nullptr;
@@ -1731,7 +1732,9 @@ void App::Quit() {
 
 POINT App::LogicalPoint(HWND window, LPARAM lparam) const noexcept {
     const UINT dpi = GetDpiForWindow(window);
-    return {MulDiv(GET_X_LPARAM(lparam), 96, static_cast<int>(dpi)), MulDiv(GET_Y_LPARAM(lparam), 96, static_cast<int>(dpi))};
+    const float x = static_cast<float>(MulDiv(GET_X_LPARAM(lparam), 96, static_cast<int>(dpi))) / ui::kContentScale;
+    const float y = static_cast<float>(MulDiv(GET_Y_LPARAM(lparam), 96, static_cast<int>(dpi))) / ui::kContentScale;
+    return {static_cast<LONG>(std::lround(x)), static_cast<LONG>(std::lround(y))};
 }
 
 UsageSnapshot App::SnapshotCopy() const {
@@ -1860,8 +1863,10 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
         ScreenToClient(window, &point);
         const UINT dpi = GetDpiForWindow(window);
-        point.x = MulDiv(point.x, 96, static_cast<int>(dpi));
-        point.y = MulDiv(point.y, 96, static_cast<int>(dpi));
+        point.x = static_cast<LONG>(std::lround(
+            static_cast<float>(MulDiv(point.x, 96, static_cast<int>(dpi))) / ui::kContentScale));
+        point.y = static_cast<LONG>(std::lround(
+            static_cast<float>(MulDiv(point.y, 96, static_cast<int>(dpi))) / ui::kContentScale));
         if (point.y >= 0 && point.y < 62 && ui::HitTestPopup(point) == ui::PopupAction::None) return HTCAPTION;
         return HTCLIENT;
     }

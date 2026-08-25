@@ -1,4 +1,5 @@
 #include "accessibility.h"
+#include "native_ui.h"
 
 #include <OleAcc.h>
 #include <OleAuto.h>
@@ -256,10 +257,10 @@ public:
         POINT origin{};
         if (!ClientToScreen(window_, &origin)) return E_FAIL;
         const UINT dpi = GetDpiForWindow(window_);
-        *left = origin.x + MulDiv(element->bounds.x, static_cast<int>(dpi), 96);
-        *top = origin.y + MulDiv(element->bounds.y, static_cast<int>(dpi), 96);
-        *width = MulDiv(element->bounds.width, static_cast<int>(dpi), 96);
-        *height = MulDiv(element->bounds.height, static_cast<int>(dpi), 96);
+        *left = origin.x + MulDiv(static_cast<int>(static_cast<float>(element->bounds.x) * ui::kContentScale), static_cast<int>(dpi), 96);
+        *top = origin.y + MulDiv(static_cast<int>(static_cast<float>(element->bounds.y) * ui::kContentScale), static_cast<int>(dpi), 96);
+        *width = MulDiv(static_cast<int>(static_cast<float>(element->bounds.width) * ui::kContentScale), static_cast<int>(dpi), 96);
+        *height = MulDiv(static_cast<int>(static_cast<float>(element->bounds.height) * ui::kContentScale), static_cast<int>(dpi), 96);
         return S_OK;
     }
 
@@ -296,8 +297,8 @@ public:
         POINT point{screen_x, screen_y};
         if (!ScreenToClient(window_, &point)) return E_FAIL;
         const UINT dpi = GetDpiForWindow(window_);
-        point.x = MulDiv(point.x, 96, static_cast<int>(dpi));
-        point.y = MulDiv(point.y, 96, static_cast<int>(dpi));
+        point.x = static_cast<LONG>(static_cast<float>(MulDiv(point.x, 96, static_cast<int>(dpi))) / ui::kContentScale);
+        point.y = static_cast<LONG>(static_cast<float>(MulDiv(point.y, 96, static_cast<int>(dpi))) / ui::kContentScale);
         const auto elements = Elements();
         const auto found = std::find_if(elements.begin(), elements.end(), [&](const Element& element) {
             return point.x >= element.bounds.x && point.x < element.bounds.x + element.bounds.width &&
