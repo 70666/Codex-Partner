@@ -513,6 +513,33 @@ std::wstring LocalReset(const RateWindow& window, bool chinese) {
     return std::to_wstring(hours / 24) + L" 天后重置";
 }
 
+std::wstring FloatBarReset(const std::optional<RateWindow>& window, bool chinese) {
+    if (!window || !window->resets_at) return T(chinese, L"Reset time unknown", L"重置时间未知");
+    const std::time_t timestamp = std::chrono::system_clock::to_time_t(*window->resets_at);
+    const std::time_t now_timestamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm reset_local{};
+    std::tm now_local{};
+    if (localtime_s(&reset_local, &timestamp) != 0 || localtime_s(&now_local, &now_timestamp) != 0) {
+        return T(chinese, L"Reset time unknown", L"重置时间未知");
+    }
+    const bool today = reset_local.tm_year == now_local.tm_year && reset_local.tm_yday == now_local.tm_yday;
+    const bool tomorrow = reset_local.tm_year == now_local.tm_year && reset_local.tm_yday == now_local.tm_yday + 1;
+    std::wostringstream label;
+    if (chinese) {
+        if (today) label << L"今天 ";
+        else if (tomorrow) label << L"明天 ";
+        else label << reset_local.tm_mon + 1 << L"月" << reset_local.tm_mday << L"日 ";
+        label << std::setfill(L'0') << std::setw(2) << reset_local.tm_hour << L":"
+              << std::setw(2) << reset_local.tm_min << L" 重置";
+    } else {
+        label << (today ? L"Today" : tomorrow ? L"Tomorrow" :
+            std::to_wstring(reset_local.tm_mon + 1) + L"/" + std::to_wstring(reset_local.tm_mday));
+        label << L" " << std::setfill(L'0') << std::setw(2) << reset_local.tm_hour << L":"
+              << std::setw(2) << reset_local.tm_min << L" reset";
+    }
+    return label.str();
+}
+
 std::wstring LocalPaceDetail(const PaceForecast& forecast, bool chinese) {
     const bool weekly = forecast.window_minutes >= 6 * 24 * 60 || forecast.window_title == L"Weekly";
     const std::wstring window = weekly ? T(chinese, L"Weekly capacity", L"每周额度") :
@@ -771,10 +798,12 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
             value->title == pace->window_title;
         const Color value_color = !value ? palette.muted : value->used_percent >= 90.0 ? palette.red :
             value->used_percent >= 70.0 || pace_risk ? palette.yellow : palette.green;
-        Text(graphics, title, R(x, 8.0F, 100.0F, 22.0F), 9.0F, FontStyleBold, palette.muted);
-        Text(graphics, percent, R(x, 25.0F, 100.0F, 24.0F), 18.0F, FontStyleBold,
+        Text(graphics, title, R(x, 6.0F, 100.0F, 20.0F), 9.0F, FontStyleBold, palette.muted);
+        Text(graphics, percent, R(x, 21.0F, 100.0F, 23.0F), 16.0F, FontStyleBold,
             value_color);
-        DrawProgress(graphics, R(x, 56.0F, 92.0F, 5.0F), value ? value->used_percent : 0.0, palette);
+        Text(graphics, FloatBarReset(value, chinese), R(x, 43.0F, 104.0F, 15.0F), 7.5F,
+            FontStyleRegular, value && value->resets_at ? palette.secondary : palette.muted);
+        DrawProgress(graphics, R(x, 62.0F, 92.0F, 4.0F), value ? value->used_percent : 0.0, palette);
     };
     draw_metric(152.0F, snapshot.session, T(chinese, L"Session", L"当前周期"));
     draw_metric(272.0F, snapshot.weekly, T(chinese, L"Weekly", L"每周额度"));
