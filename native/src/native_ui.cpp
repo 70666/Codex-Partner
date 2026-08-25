@@ -62,6 +62,16 @@ float Scale(HWND window) {
 
 RectF R(float x, float y, float width, float height) { return RectF(x, y, width, height); }
 
+// The original compact type ramp was technically DPI-aware, but several
+// secondary labels still landed below a comfortable reading size on dense
+// laptop displays. Give the smallest text the largest lift while preserving
+// the visual hierarchy and the existing card geometry.
+float ReadableFontSize(float size) noexcept {
+    if (size < 11.0F) return size + 1.5F;
+    if (size < 16.0F) return size + 1.0F;
+    return size + 0.5F;
+}
+
 std::unique_ptr<GraphicsPath> RoundedPath(const RectF& rect, float radius) {
     auto path = std::make_unique<GraphicsPath>(FillModeAlternate);
     const float diameter = radius * 2.0F;
@@ -87,7 +97,7 @@ void StrokeRounded(Graphics& graphics, const RectF& rect, float radius, const Co
 
 void Text(Graphics& graphics, const std::wstring& value, const RectF& rect, float size, FontStyle style, const Color& color, StringAlignment alignment = StringAlignmentNear) {
     FontFamily family(L"Segoe UI");
-    Font font(&family, size, style, UnitPixel);
+    Font font(&family, ReadableFontSize(size), style, UnitPixel);
     SolidBrush brush(color);
     StringFormat format;
     format.SetTrimming(StringTrimmingEllipsisCharacter);
@@ -99,7 +109,7 @@ void Text(Graphics& graphics, const std::wstring& value, const RectF& rect, floa
 
 void TextWrapped(Graphics& graphics, const std::wstring& value, const RectF& rect, float size, FontStyle style, const Color& color) {
     FontFamily family(L"Segoe UI");
-    Font font(&family, size, style, UnitPixel);
+    Font font(&family, ReadableFontSize(size), style, UnitPixel);
     SolidBrush brush(color);
     StringFormat format;
     format.SetTrimming(StringTrimmingEllipsisWord);
@@ -587,7 +597,7 @@ void DrawSpendMetric(Graphics& graphics, float x, float y, float width, const wc
     FontFamily family(L"Segoe UI");
     RectF measured;
     while (amount_size > 13.0F) {
-        Font font(&family, amount_size, FontStyleBold, UnitPixel);
+        Font font(&family, ReadableFontSize(amount_size), FontStyleBold, UnitPixel);
         graphics.MeasureString(formatted.c_str(), static_cast<INT>(formatted.size()), &font, PointF{}, &measured);
         if (measured.Width <= width - 28.0F) break;
         amount_size -= 1.0F;
