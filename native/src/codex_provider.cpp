@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iterator>
 
@@ -68,7 +69,9 @@ std::optional<RateWindow> ParseWindow(const JsonValue* value, std::wstring title
     window.title = std::move(title);
     window.used_percent = std::clamp(percent.value_or(fallback_percent.value_or(0.0)), 0.0, 100.0);
     if (const auto seconds = FlexibleNumber(value->find("limit_window_seconds"))) window.window_minutes = static_cast<int>(*seconds / 60.0);
-    if (const auto reset = FlexibleNumber(value->find("reset_at"))) window.resets_at = std::chrono::system_clock::time_point(std::chrono::seconds(static_cast<long long>(*reset)));
+    auto reset_after = FlexibleNumber(value->find("reset_after_seconds"));
+    if (!reset_after) reset_after = FlexibleNumber(value->find("reset_after"));
+    window.resets_at = ResolveCodexResetTime(FlexibleNumber(value->find("reset_at")), reset_after);
     return window;
 }
 
@@ -92,6 +95,22 @@ UsageSnapshot ErrorSnapshot(std::wstring error, ProviderConnectionState connecti
 }
 
 }  // namespace
+
+std::optional<std::chrono::system_clock::time_point> ResolveCodexResetTime(
+    std::optional<double> reset_at,
+    std::optional<double> reset_after_seconds,
+    std::chrono::system_clock::time_point now) noexcept {
+    if (reset_at && std::isfinite(*reset_at) && *reset_at > 0.0) {
+        double epoch_seconds = *reset_at;
+        if (epoch_seconds >= 100'000'000'000.0) epoch_seconds /= 1000.0;
+        return std::chrono::system_clock::time_point{
+            std::chrono::seconds{static_cast<long long>(epoch_seconds)}};
+    }
+    if (reset_after_seconds && std::isfinite(*reset_after_seconds) && *reset_after_seconds >= 0.0) {
+        return now + std::chrono::seconds{static_cast<long long>(*reset_after_seconds)};
+    }
+    return std::nullopt;
+}
 
 std::filesystem::path CodexProvider::CodexHome() {
     std::wstring value(32768, L'\0');

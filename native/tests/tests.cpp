@@ -80,6 +80,17 @@ int main(int argc, char** argv) {
     Require(tokens != nullptr, "tokens object exists");
     Require(tokens->find("access_token")->as_string() == "secret", "nested string is available");
 
+    const auto reset_now = std::chrono::system_clock::time_point{std::chrono::seconds{1'800'000'000}};
+    const auto relative_reset = codex_partner::ResolveCodexResetTime(std::nullopt, 3600.0, reset_now);
+    Require(relative_reset && *relative_reset == reset_now + std::chrono::hours{1},
+        "relative Codex reset_after_seconds becomes an absolute reset time");
+    const auto millisecond_reset = codex_partner::ResolveCodexResetTime(1'800'007'200'000.0, std::nullopt, reset_now);
+    Require(millisecond_reset && *millisecond_reset == reset_now + std::chrono::hours{2},
+        "millisecond Codex reset_at values are normalized to Unix seconds");
+    const auto absolute_reset = codex_partner::ResolveCodexResetTime(1'800'010'800.0, 20.0, reset_now);
+    Require(absolute_reset && *absolute_reset == reset_now + std::chrono::hours{3},
+        "absolute Codex reset_at takes precedence over a relative fallback");
+
     auto sensitive_json = codex_partner::ParseJson(R"({"token":"must-not-remain","nested":["also-secret"]})");
     Require(sensitive_json.ok(), "sensitive JSON fixture parses");
     sensitive_json.value.secure_clear();
