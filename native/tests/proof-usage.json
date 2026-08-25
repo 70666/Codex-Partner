@@ -1,0 +1,60 @@
+{
+  "providerId": "codex",
+  "displayName": "Codex",
+  "primary": {
+    "usedPercent": 46,
+    "remainingPercent": 54,
+    "windowMinutes": 300,
+    "resetsAt": null,
+    "resetDescription": "Resets in 2 hr",
+    "isExhausted": false,
+    "reservePercent": null,
+    "reserveDescription": null
+  },
+  "selectedMetric": {
+    "usedPercent": 46,
+    "remainingPercent": 54,
+    "windowMinutes": 300,
+    "resetsAt": null,
+    "resetDescription": "Resets in 2 hr",
+    "isExhausted": false,
+    "reservePercent": null,
+    "reserveDescription": null
+  },
+  "secondary": {
+    "usedPercent": 82,
+    "remainingPercent": 18,
+    "windowMinutes": 10080,
+    "resetsAt": null,
+    "resetDescription": "Resets in 3 days",
+    "isExhausted": false,
+    "reservePercent": null,
+    "reserveDescription": null
+  },
+  "modelSpecific": null,
+  "tertiary": null,
+  "extraRateWindows": [],
+  "cost": {
+    "used": 8.4,
+    "limit": null,
+    "remaining": null,
+    "currencyCode": "USD",
+    "period": "Credits",
+    "resetsAt": null,
+    "formattedUsed": "$8.40",
+    "formattedLimit": null,
+    "balance": 18.75,
+    "formattedBalance": "$18.75",
+    "oneDayUsd": 1.42,
+    "sevenDayUsd": 8.73,
+    "thirtyDayUsd": 31.58
+  },
+  "planName": "ChatGPT Plus",
+  "accountEmail": null,
+  "sourceLabel": "proof",
+  "updatedAt": "2026-08-23T14:00:00Z",
+  "error": null,
+  "pace": null,
+  "accountOrganization": null,
+  "trayStatusLabel": null
+}

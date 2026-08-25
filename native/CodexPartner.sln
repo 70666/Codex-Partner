@@ -1,0 +1,25 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11806.211
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CodexPartner", "CodexPartner.vcxproj", "{B0999D36-8374-4C5C-A3AC-C14B94D7BD88}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CodexPartner.Tests", "CodexPartner.Tests.vcxproj", "{2D8C1A6A-53C3-4B11-8930-8A5DCC6C783A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B0999D36-8374-4C5C-A3AC-C14B94D7BD88}.Debug|x64.ActiveCfg = Debug|x64
+		{B0999D36-8374-4C5C-A3AC-C14B94D7BD88}.Debug|x64.Build.0 = Debug|x64
+		{B0999D36-8374-4C5C-A3AC-C14B94D7BD88}.Release|x64.ActiveCfg = Release|x64
+		{B0999D36-8374-4C5C-A3AC-C14B94D7BD88}.Release|x64.Build.0 = Release|x64
+		{2D8C1A6A-53C3-4B11-8930-8A5DCC6C783A}.Debug|x64.ActiveCfg = Debug|x64
+		{2D8C1A6A-53C3-4B11-8930-8A5DCC6C783A}.Debug|x64.Build.0 = Debug|x64
+		{2D8C1A6A-53C3-4B11-8930-8A5DCC6C783A}.Release|x64.ActiveCfg = Release|x64
+		{2D8C1A6A-53C3-4B11-8930-8A5DCC6C783A}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal
+

@@ -1,0 +1,52 @@
+name: Native release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Validate tag and version
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}'
+          $version = (Get-Content version.env | Where-Object { $_ -like 'MARKETING_VERSION=*' }).Split('=')[1]
+          if ($tag -ne "v$version") { throw "Tag $tag does not match version $version" }
+      - name: Build, test, and package
+        shell: pwsh
+        run: .\scripts\local-check.ps1
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}'
+          $version = $tag.TrimStart('v')
+          $assets = Get-ChildItem native\build\package -File | Where-Object {
+            $_.Name -in @(
+              "Codex-Partner-$version-native-windows-x64.exe",
+              "Codex-Partner-$version-native-windows-x64.exe.sha256",
+              "Codex-Partner-$version-windows-x64.zip",
+              "Codex-Partner-$version-windows-x64.sha256"
+            )
+          }
+          if ($assets.Count -ne 4) { throw "Expected exactly four release assets, found $($assets.Count)" }
+          if (gh release view $tag 2>$null) {
+            gh release upload $tag @($assets.FullName) --clobber
+            gh release edit $tag --title "Codex Partner $version" --notes "Native C++ release $version"
+          } else {
+            gh release create $tag @($assets.FullName) --title "Codex Partner $version" --notes "Native C++ release $version"
+          }

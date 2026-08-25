@@ -1,0 +1,22 @@
+{
+  "providerId": "codex",
+  "displayName": "Codex",
+  "primary": {
+    "usedPercent": 60,
+    "remainingPercent": 40,
+    "windowMinutes": 300
+  },
+  "secondary": {
+    "usedPercent": 20,
+    "remainingPercent": 80,
+    "windowMinutes": 10080
+  },
+  "cost": {
+    "oneDayUsd": 12.34,
+    "sevenDayUsd": 56.78,
+    "thirtyDayUsd": 90.12
+  },
+  "planName": "ChatGPT Pro",
+  "updatedAt": "2026-08-24T08:00:00Z",
+  "error": null
+}

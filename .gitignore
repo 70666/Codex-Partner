@@ -1,0 +1,27 @@
+# Build output
+/native/build/
+*.obj
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
+*.recipe
+
+# Local configuration and tooling
+.env
+.env.*
+.local/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+Thumbs.db
+.DS_Store

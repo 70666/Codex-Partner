@@ -1,0 +1,19 @@
+{
+  "providerId": "codex",
+  "displayName": "Codex",
+  "primary": {
+    "usedPercent": 46,
+    "windowMinutes": 300
+  },
+  "secondary": {
+    "usedPercent": 82,
+    "windowMinutes": 10080
+  },
+  "cost": {
+    "oneDayUsd": 1.42,
+    "sevenDayUsd": 8.73,
+    "thirtyDayUsd": 31.58
+  },
+  "planName": "ChatGPT Plus",
+  "error": "Proof-only transient network failure"
+}

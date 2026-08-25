@@ -1,0 +1,16 @@
+name: C++ checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, test, and package
+        shell: pwsh
+        run: .\scripts\local-check.ps1
