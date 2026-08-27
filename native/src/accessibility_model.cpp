@@ -398,7 +398,7 @@ std::vector<Element> BuildSettingsElements(const AppSettings& settings, const Us
                 T(chinese, L"Alerts are off", L"提醒已关闭"));
         if (!settings.usage_notifications) snooze_element.state |= StateUnavailable;
         elements.push_back(std::move(snooze_element));
-        elements.push_back(ActionElement(32, Role::PushButton, {208, 458, 472, 72}, T(chinese, L"Send a test notification", L"发送测试通知"), {},
+        elements.push_back(ActionElement(32, Role::PushButton, {208, 332, 472, 60}, T(chinese, L"Send a test notification", L"发送测试通知"), {},
             T(chinese, L"Press", L"按下"), {}, static_cast<int>(ui::SettingsAction::TestNotification),
             is_focused(ui::SettingsAction::TestNotification), is_pressed(ui::SettingsAction::TestNotification)));
     } else if (tab == ui::SettingsTab::FloatBar) {
@@ -407,7 +407,7 @@ std::vector<Element> BuildSettingsElements(const AppSettings& settings, const Us
             T(chinese, L"Keep session and weekly capacity visible above other windows", L"在其他窗口上方持续显示当前周期和每周额度"),
             T(chinese, L"Toggle", L"切换"), {}, static_cast<int>(ui::SettingsAction::ToggleFloatBar),
             is_focused(ui::SettingsAction::ToggleFloatBar), is_pressed(ui::SettingsAction::ToggleFloatBar), settings.show_float_bar));
-        elements.push_back(ActionElement(36, Role::PushButton, {208, 394, 472, 62},
+        elements.push_back(ActionElement(36, Role::PushButton, {208, 188, 472, 60},
             T(chinese, L"Reset floating bar position", L"重置浮动用量条位置"),
             T(chinese, L"Move it to the top right of the current monitor", L"将它移到当前显示器右上角"),
             T(chinese, L"Reset", L"重置"), {}, static_cast<int>(ui::SettingsAction::ResetFloatBarPosition),

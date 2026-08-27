@@ -613,7 +613,10 @@ bool App::CreateWindows() {
     if (!popup_) return false;
     SetRoundedCorners(popup_);
 
-    const DWORD settings_style = WS_POPUP | WS_THICKFRAME | WS_SYSMENU |
+    // The settings surface uses a deliberately fixed native layout. Do not
+    // advertise resizing until every control has a responsive layout and hit
+    // target; a resizable frame with fixed coordinates is actively misleading.
+    const DWORD settings_style = WS_POPUP | WS_SYSMENU |
         (proof_surface.starts_with(L"settings") ? WS_VISIBLE : 0U);
     RECT settings_rect{0, 0, MulDiv(ui::kSettingsWindowWidth, static_cast<int>(dpi), 96), MulDiv(ui::kSettingsWindowHeight, static_cast<int>(dpi), 96)};
     AdjustWindowRectExForDpi(&settings_rect, settings_style, FALSE, 0, dpi);

@@ -250,8 +250,11 @@ void DrawSettingRow(Graphics& graphics, float y, const std::wstring& title, cons
     if (pressed) row = R(215.0F, y + 1.0F, 452.0F, 62.0F);
     FillRounded(graphics, row, 10.0F, Blend(palette.surface, palette.accent_soft, hovered ? progress * 0.55F : 0.0F));
     StrokeRounded(graphics, row, 10.0F, attention ? palette.red : pressed ? palette.accent : Blend(palette.border, palette.accent, hovered ? progress * 0.55F : 0.0F));
-    Text(graphics, title, R(230.0F, y + 8.0F, 250.0F, 22.0F), 13.0F, FontStyleBold, palette.text);
-    Text(graphics, description, R(230.0F, y + 31.0F, 310.0F, 18.0F), 10.0F, FontStyleRegular, attention ? palette.red : palette.muted);
+    const bool has_description = !description.empty();
+    Text(graphics, title, R(230.0F, y + (has_description ? 8.0F : 20.0F), 250.0F, 22.0F), 13.0F, FontStyleBold, palette.text);
+    if (has_description) {
+        Text(graphics, description, R(230.0F, y + 31.0F, 310.0F, 18.0F), 10.0F, FontStyleRegular, attention ? palette.red : palette.muted);
+    }
     if (toggle) {
         const Color track = checked ? palette.accent : palette.border;
         FillRounded(graphics, R(602.0F, y + 20.0F, 46.0F, 24.0F), 12.0F, track);
@@ -910,15 +913,14 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         persistence == SettingsPersistenceState::Failed ?
         T(chinese, L"Save failed · changes restored", L"保存失败 · 已恢复原设置") :
         diagnostics_copied ? T(chinese, L"Diagnostics copied", L"诊断摘要已复制") :
-        persistence == SettingsPersistenceState::Saved ? T(chinese, L"Saved", L"已保存") :
-        T(chinese, L"Native Windows preferences", L"Windows 原生偏好设置");
+        persistence == SettingsPersistenceState::Saved ? T(chinese, L"Saved", L"已保存") : L"";
     const Color feedback_color = external_active ?
         (ExternalActionFullySucceeded(external_feedback) ? palette.green :
             ExternalActionPartiallySucceeded(external_feedback) ? palette.yellow : palette.red) :
         shortcut_attention ? palette.red :
         persistence == SettingsPersistenceState::Failed ? palette.red :
         diagnostics_copied || persistence == SettingsPersistenceState::Saved ? palette.green : palette.muted;
-    Text(graphics, feedback, R(408.0F, 25.0F, 260.0F, 28.0F), 11.0F, FontStyleRegular,
+    Text(graphics, feedback, R(408.0F, 25.0F, 230.0F, 28.0F), 11.0F, FontStyleRegular,
         feedback_color, StringAlignmentFar);
     DrawCloseButton(graphics, R(656.0F, 16.0F, 30.0F, 30.0F), palette,
         hovered == SettingsAction::Close, pressed == SettingsAction::Close, hover_progress);
@@ -932,31 +934,30 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     DrawSidebarTab(graphics, 278.0F, T(chinese, L"Usage & spend", L"使用与费用"), SettingsTab::UsageSpend, tab, palette, hovered, pressed, hover_progress);
     DrawSidebarTab(graphics, 324.0F, T(chinese, L"About", L"关于"), SettingsTab::About, tab, palette, hovered, pressed, hover_progress);
     Text(graphics, L"Codex Partner " CODEX_PARTNER_VERSION_WIDE, R(36.0F, 606.0F, 140.0F, 22.0F), 10.0F, FontStyleBold, palette.muted);
-    Text(graphics, T(chinese, L"Crafted for Windows", L"为 Windows 精心打造"), R(36.0F, 626.0F, 140.0F, 18.0F), 9.0F, FontStyleRegular, palette.muted);
 
     if (tab == SettingsTab::General) {
         Text(graphics, T(chinese, L"GENERAL", L"通用"), R(218.0F, 76.0F, 220.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         const wchar_t* language = settings.language == LanguageMode::SimplifiedChinese ? L"简体中文" : settings.language == LanguageMode::English ? L"English" : T(chinese, L"System", L"跟随系统");
-        DrawSettingRow(graphics, 104.0F, T(chinese, L"Language", L"语言"), T(chinese, L"Choose the language used throughout Codex Partner", L"选择 Codex Partner 全部界面的显示语言"), language, palette, false, false, hovered == SettingsAction::CycleLanguage, pressed == SettingsAction::CycleLanguage, hover_progress);
+        DrawSettingRow(graphics, 104.0F, T(chinese, L"Language", L"语言"), L"", language, palette, false, false, hovered == SettingsAction::CycleLanguage, pressed == SettingsAction::CycleLanguage, hover_progress);
         const wchar_t* theme = settings.theme == ThemeMode::Light ? L"Light" : settings.theme == ThemeMode::Dark ? L"Dark" : L"System";
         const wchar_t* localized_theme = chinese ? (settings.theme == ThemeMode::Light ? L"浅色" : settings.theme == ThemeMode::Dark ? L"深色" : L"跟随系统") : theme;
-        DrawSettingRow(graphics, 172.0F, T(chinese, L"Theme", L"主题"), T(chinese, L"Follow Windows or choose a fixed appearance", L"跟随 Windows 或选择固定外观"), localized_theme, palette, false, false, hovered == SettingsAction::CycleTheme, pressed == SettingsAction::CycleTheme, hover_progress);
+        DrawSettingRow(graphics, 172.0F, T(chinese, L"Theme", L"主题"), L"", localized_theme, palette, false, false, hovered == SettingsAction::CycleTheme, pressed == SettingsAction::CycleTheme, hover_progress);
         const std::wstring shortcut_description = global_shortcut_status == GlobalShortcutStatus::CandidateUnavailable ?
             T(chinese, L"That combination is in use; current shortcut kept", L"该组合已被占用；已保留当前快捷键") :
             global_shortcut_status == GlobalShortcutStatus::Unavailable ?
                 T(chinese, L"Used by another app; choose a different shortcut", L"已被其他应用占用；请选择其他组合") :
             settings.global_shortcut == GlobalShortcut::Disabled ?
                 T(chinese, L"Global quick peek is turned off", L"全局快速查看已关闭") :
-                T(chinese, L"Open or hide Codex Partner from anywhere", L"在任意应用中打开或隐藏 Codex Partner");
+                L"";
         const std::wstring shortcut_value = settings.global_shortcut == GlobalShortcut::Disabled && chinese ?
             L"关闭" : GlobalShortcutLabel(settings.global_shortcut);
         DrawSettingRow(graphics, 240.0F, T(chinese, L"Quick peek shortcut", L"快速查看快捷键"), shortcut_description,
             shortcut_value, palette, false, false, hovered == SettingsAction::ChooseGlobalShortcut,
             pressed == SettingsAction::ChooseGlobalShortcut, hover_progress, shortcut_attention);
-        DrawSettingRow(graphics, 308.0F, T(chinese, L"Refresh interval", L"刷新间隔"), T(chinese, L"Background usage refresh cadence", L"后台刷新使用情况的频率"), std::to_wstring(settings.refresh_minutes) + T(chinese, L" min", L" 分钟"), palette, false, false, hovered == SettingsAction::CycleRefresh, pressed == SettingsAction::CycleRefresh, hover_progress);
-        DrawSettingRow(graphics, 376.0F, T(chinese, L"Start at login", L"登录时启动"), T(chinese, L"Register for the current Windows user", L"随当前 Windows 用户自动启动"), {}, palette, true, settings.start_at_login, hovered == SettingsAction::ToggleStartAtLogin, pressed == SettingsAction::ToggleStartAtLogin, hover_progress);
-        DrawSettingRow(graphics, 444.0F, T(chinese, L"Start minimized", L"启动时最小化"), T(chinese, L"Keep Codex Partner quietly in the tray", L"启动后让 Codex Partner 安静地留在系统托盘"), {}, palette, true, settings.start_minimized, hovered == SettingsAction::ToggleStartMinimized, pressed == SettingsAction::ToggleStartMinimized, hover_progress);
-        DrawSettingRow(graphics, 512.0F, T(chinese, L"Hide identity", L"隐藏身份信息"), T(chinese, L"Hide plan in quick surfaces and copied summaries", L"在快捷界面和复制摘要中隐藏套餐信息"), {}, palette, true, settings.hide_identity, hovered == SettingsAction::TogglePrivacy, pressed == SettingsAction::TogglePrivacy, hover_progress);
+        DrawSettingRow(graphics, 308.0F, T(chinese, L"Refresh interval", L"刷新间隔"), L"", std::to_wstring(settings.refresh_minutes) + T(chinese, L" min", L" 分钟"), palette, false, false, hovered == SettingsAction::CycleRefresh, pressed == SettingsAction::CycleRefresh, hover_progress);
+        DrawSettingRow(graphics, 376.0F, T(chinese, L"Start at login", L"登录时启动"), L"", {}, palette, true, settings.start_at_login, hovered == SettingsAction::ToggleStartAtLogin, pressed == SettingsAction::ToggleStartAtLogin, hover_progress);
+        DrawSettingRow(graphics, 444.0F, T(chinese, L"Start minimized", L"启动时最小化"), L"", {}, palette, true, settings.start_minimized, hovered == SettingsAction::ToggleStartMinimized, pressed == SettingsAction::ToggleStartMinimized, hover_progress);
+        DrawSettingRow(graphics, 512.0F, T(chinese, L"Hide identity", L"隐藏身份信息"), L"", {}, palette, true, settings.hide_identity, hovered == SettingsAction::TogglePrivacy, pressed == SettingsAction::TogglePrivacy, hover_progress);
     } else if (tab == SettingsTab::Providers) {
         Text(graphics, T(chinese, L"PROVIDERS", L"提供商"), R(218.0F, 76.0F, 180.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         FillRounded(graphics, R(214.0F, 104.0F, 454.0F, 128.0F), 12.0F, palette.surface);
@@ -976,46 +977,28 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         Text(graphics, T(chinese, L"CREDENTIAL PATH", L"凭据位置"), R(218.0F, 252.0F, 180.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         FillRounded(graphics, R(214.0F, 280.0F, 454.0F, 108.0F), 11.0F, palette.surface);
         StrokeRounded(graphics, R(214.0F, 280.0F, 454.0F, 108.0F), 11.0F, palette.border);
-        Text(graphics, T(chinese, L"Detected automatically · never copied", L"自动检测 · 从不复制"), R(232.0F, 296.0F, 320.0F, 25.0F), 14.0F, FontStyleBold, palette.text);
+        Text(graphics, T(chinese, L"Local Codex credentials", L"本地 Codex 凭据"), R(232.0F, 296.0F, 320.0F, 25.0F), 14.0F, FontStyleBold, palette.text);
         TextWrapped(graphics, T(chinese, L"CODEX_HOME\\auth.json, or %USERPROFILE%\\.codex\\auth.json. Access is read-only.",
-            L"CODEX_HOME\\auth.json，或 %USERPROFILE%\\.codex\\auth.json。仅进行只读访问。"),
+            L"CODEX_HOME\\auth.json 或 %USERPROFILE%\\.codex\\auth.json"),
             R(232.0F, 326.0F, 410.0F, 42.0F), 10.0F, FontStyleRegular, palette.secondary);
     } else if (tab == SettingsTab::Notifications) {
         Text(graphics, T(chinese, L"NOTIFICATIONS", L"通知"), R(218.0F, 76.0F, 180.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
-        DrawSettingRow(graphics, 104.0F, T(chinese, L"Usage alerts", L"额度提醒"), T(chinese, L"Notify only when usage crosses a threshold", L"仅在使用率跨过阈值时提醒"), {}, palette, true, settings.usage_notifications, hovered == SettingsAction::ToggleUsageNotifications, pressed == SettingsAction::ToggleUsageNotifications, hover_progress);
-        DrawSettingRow(graphics, 176.0F, T(chinese, L"Warning threshold", L"预警阈值"), T(chinese, L"Critical alerts remain fixed at 95%", L"严重提醒固定为 95%"), std::to_wstring(settings.usage_warning_percent) + L"%", palette, false, false, hovered == SettingsAction::ChooseUsageWarning, pressed == SettingsAction::ChooseUsageWarning, hover_progress);
+        DrawSettingRow(graphics, 104.0F, T(chinese, L"Usage alerts", L"额度提醒"), L"", {}, palette, true, settings.usage_notifications, hovered == SettingsAction::ToggleUsageNotifications, pressed == SettingsAction::ToggleUsageNotifications, hover_progress);
+        DrawSettingRow(graphics, 176.0F, T(chinese, L"Warning threshold", L"预警阈值"), L"", std::to_wstring(settings.usage_warning_percent) + L"%", palette, false, false, hovered == SettingsAction::ChooseUsageWarning, pressed == SettingsAction::ChooseUsageWarning, hover_progress);
         DrawSettingRow(graphics, 248.0F, T(chinese, L"Pause alerts", L"暂停提醒"),
-            T(chinese, L"Quiet for a while, then resume automatically", L"临时安静一会儿，之后自动恢复"),
+            L"",
             settings.usage_notifications ?
                 FormatNotificationSnoozeCompact(settings.notification_snoozed_until, chinese) :
                 T(chinese, L"Off", L"关闭"), palette, false, false,
             hovered == SettingsAction::ChooseNotificationSnooze,
             pressed == SettingsAction::ChooseNotificationSnooze, hover_progress);
-        FillRounded(graphics, R(214.0F, 340.0F, 454.0F, 104.0F), 12.0F, palette.surface);
-        StrokeRounded(graphics, R(214.0F, 340.0F, 454.0F, 104.0F), 12.0F, palette.border);
-        Text(graphics, T(chinese, L"Thoughtful, not noisy", L"及时提醒，不频繁打扰"), R(232.0F, 356.0F, 330.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
-        TextWrapped(graphics, T(chinese,
-            L"Pause for 1, 4, or 24 hours from here or the tray. Codex Partner resumes alerts automatically.",
-            L"可在这里或托盘暂停 1、4 或 24 小时；到期后 Codex Partner 会自动恢复提醒。"),
-            R(232.0F, 388.0F, 404.0F, 42.0F), 10.0F, FontStyleRegular, palette.secondary);
-        DrawWideAction(graphics, 468.0F, T(chinese, L"Send a test notification", L"发送测试通知"), palette, hovered == SettingsAction::TestNotification, pressed == SettingsAction::TestNotification, hover_progress);
+        DrawWideAction(graphics, 340.0F, T(chinese, L"Send a test notification", L"发送测试通知"), palette, hovered == SettingsAction::TestNotification, pressed == SettingsAction::TestNotification, hover_progress);
     } else if (tab == SettingsTab::FloatBar) {
         Text(graphics, T(chinese, L"FLOATING USAGE BAR", L"浮动用量条"), R(218.0F, 76.0F, 240.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         DrawSettingRow(graphics, 104.0F, T(chinese, L"Show floating bar", L"显示浮动用量条"),
-            T(chinese, L"Keep session and weekly capacity one glance away", L"随时一眼查看当前周期和每周额度"), {}, palette, true,
+            L"", {}, palette, true,
             settings.show_float_bar, hovered == SettingsAction::ToggleFloatBar, pressed == SettingsAction::ToggleFloatBar, hover_progress);
-        FillRounded(graphics, R(214.0F, 196.0F, 454.0F, 170.0F), 12.0F, palette.surface);
-        StrokeRounded(graphics, R(214.0F, 196.0F, 454.0F, 170.0F), 12.0F, palette.border);
-        Text(graphics, T(chinese, L"Quietly useful", L"安静但真正有用"), R(234.0F, 212.0F, 300.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
-        TextWrapped(graphics, T(chinese,
-            L"Drag it anywhere, click it to open the full panel, or press Esc to hide it. Its position, language, theme, and visibility survive restarts.",
-            L"可以拖到任意位置；点击即可打开完整面板，按 Esc 可隐藏。位置、语言、主题和显示状态都会在重启后保留。"),
-            R(234.0F, 246.0F, 408.0F, 58.0F), 10.0F, FontStyleRegular, palette.secondary);
-        FillRounded(graphics, R(234.0F, 318.0F, 86.0F, 7.0F), 3.5F, palette.accent);
-        FillRounded(graphics, R(336.0F, 318.0F, 132.0F, 7.0F), 3.5F, palette.green);
-        Text(graphics, T(chinese, L"Session", L"当前周期"), R(234.0F, 329.0F, 86.0F, 20.0F), 9.0F, FontStyleRegular, palette.muted);
-        Text(graphics, T(chinese, L"Weekly", L"每周额度"), R(336.0F, 329.0F, 132.0F, 20.0F), 9.0F, FontStyleRegular, palette.muted);
-        DrawWideAction(graphics, 404.0F, T(chinese, L"Reset position to the top right", L"将位置重置到右上角"), palette,
+        DrawWideAction(graphics, 196.0F, T(chinese, L"Reset position to the top right", L"将位置重置到右上角"), palette,
             hovered == SettingsAction::ResetFloatBarPosition, pressed == SettingsAction::ResetFloatBarPosition, hover_progress);
     } else if (tab == SettingsTab::UsageSpend) {
         Text(graphics, T(chinese, L"USAGE & SPEND", L"使用与费用"), R(218.0F, 76.0F, 220.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
@@ -1037,29 +1020,19 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         DrawTopProjects(graphics, spend, palette, chinese, settings.hide_identity);
         std::wstring coverage;
         if (const auto event_percent = SpendPricingCoveragePercent(spend)) {
-            coverage = std::to_wstring(*event_percent) + T(chinese, L"% events", L"% 事件");
-            if (const auto token_percent = SpendTokenCoveragePercent(spend)) {
-                coverage += L"  ·  " + std::to_wstring(*token_percent) + T(chinese, L"% tokens priced", L"% token 已计价");
-            }
+            coverage = std::to_wstring(*event_percent) + T(chinese, L"% of records priced", L"% 记录已计价");
         } else {
             coverage = T(chinese, L"Pricing coverage unavailable", L"计价覆盖率不可用");
         }
         if (spend.unpriced_events > 0) coverage += L"  \u00b7  " + CompactCount(spend.unpriced_events) + T(chinese, L" unpriced", L" 个未计价");
-        coverage += L"  \u00b7  " + std::to_wstring(spend.files_scanned) + T(chinese, L" files", L" 个文件");
         Text(graphics, coverage, R(220.0F, 660.0F, 438.0F, 18.0F), 8.5F, FontStyleRegular,
             spend.partial ? palette.yellow : palette.muted, StringAlignmentCenter);
-        const std::wstring estimate_note = refresh_phase == RefreshPhase::ScanningSpend ?
-            T(chinese, L"Scanning local logs · current chart stays visible", L"正在扫描本地日志 · 当前图表继续显示") :
-            T(chinese, L"Local token_count estimate · private · not an invoice", L"本地 token_count 估算 · 保持私密 · 并非账单");
-        Text(graphics, estimate_note, R(220.0F, 676.0F, 438.0F, 18.0F), 8.5F, FontStyleRegular,
-            RefreshIsActive(refresh_phase) ? palette.yellow : palette.secondary, StringAlignmentCenter);
     } else {
         Text(graphics, T(chinese, L"ABOUT", L"关于"), R(218.0F, 76.0F, 180.0F, 26.0F), 10.0F, FontStyleBold, palette.muted);
         FillRounded(graphics, R(214.0F, 104.0F, 454.0F, 188.0F), 12.0F, palette.surface);
         StrokeRounded(graphics, R(214.0F, 104.0F, 454.0F, 188.0F), 12.0F, palette.border);
         Text(graphics, L"Codex Partner", R(236.0F, 126.0F, 300.0F, 34.0F), 22.0F, FontStyleBold, palette.text);
-        Text(graphics, T(chinese, L"Version " CODEX_PARTNER_VERSION_WIDE L" \u00b7 Native for Windows", L"版本 " CODEX_PARTNER_VERSION_WIDE L" \u00b7 Windows 原生版"), R(236.0F, 168.0F, 330.0F, 24.0F), 11.0F, FontStyleRegular, palette.secondary);
-        TextWrapped(graphics, T(chinese, L"A fast, private Windows companion for Codex capacity and local API-equivalent usage estimates.", L"轻巧、私密的 Windows Codex 助手，用于查看额度和本地 API 等价值估算。"), R(236.0F, 208.0F, 400.0F, 54.0F), 11.0F, FontStyleRegular, palette.secondary);
+        Text(graphics, T(chinese, L"Version " CODEX_PARTNER_VERSION_WIDE, L"版本 " CODEX_PARTNER_VERSION_WIDE), R(236.0F, 168.0F, 330.0F, 24.0F), 11.0F, FontStyleRegular, palette.secondary);
 
         FillRounded(graphics, R(214.0F, 310.0F, 454.0F, 146.0F), 12.0F, palette.surface);
         StrokeRounded(graphics, R(214.0F, 310.0F, 454.0F, 146.0F), 12.0F, palette.border);
@@ -1143,10 +1116,10 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
             Text(graphics, labels[index], R(x + 8.0F, 486.0F, 205.0F, 42.0F), 11.0F, FontStyleBold, palette.accent, StringAlignmentCenter);
         }
     }
-    const wchar_t* settings_hint = hovered == SettingsAction::None ?
-        T(chinese, L"Tab / arrow keys select  \u00b7  Enter activates  \u00b7  Esc closes", L"Tab / 方向键选择  \u00b7  Enter 确认  \u00b7  Esc 关闭") :
-        SettingsActionHint(hovered, chinese);
-    Text(graphics, settings_hint, R(220.0F, 700.0F, 440.0F, 18.0F), 9.0F, FontStyleRegular, hovered == SettingsAction::None ? palette.muted : palette.accent, StringAlignmentCenter);
+    if (hovered != SettingsAction::None) {
+        Text(graphics, SettingsActionHint(hovered, chinese), R(220.0F, 700.0F, 440.0F, 18.0F), 9.0F,
+            FontStyleRegular, palette.accent, StringAlignmentCenter);
+    }
 }
 
 PopupAction HitTestPopup(POINT point, float primary_y) noexcept {
@@ -1181,10 +1154,10 @@ SettingsAction HitTestSettings(POINT point, SettingsTab tab) noexcept {
         if (point.y >= 96 && point.y < 176) return SettingsAction::ToggleUsageNotifications;
         if (point.y >= 176 && point.y < 248) return SettingsAction::ChooseUsageWarning;
         if (point.y >= 248 && point.y < 320) return SettingsAction::ChooseNotificationSnooze;
-        if (point.y >= 458 && point.y < 530) return SettingsAction::TestNotification;
+        if (point.y >= 332 && point.y < 392) return SettingsAction::TestNotification;
     } else if (tab == SettingsTab::FloatBar) {
         if (point.y >= 96 && point.y < 176) return SettingsAction::ToggleFloatBar;
-        if (point.y >= 394 && point.y < 456) return SettingsAction::ResetFloatBarPosition;
+        if (point.y >= 188 && point.y < 248) return SettingsAction::ResetFloatBarPosition;
     } else if (tab == SettingsTab::About) {
         if (point.y >= 390 && point.y < 448) return SettingsAction::CheckForUpdates;
         if (point.y >= 448 && point.y < 506) return SettingsAction::ReportIssue;
