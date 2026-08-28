@@ -75,10 +75,10 @@ void DrawPartnerMark(Graphics& graphics, const RectF& rect) {
 }
 
 Palette Colors(bool light, BackdropStyle backdrop) {
-    if (light && backdrop == BackdropStyle::AcrylicGlass) return {
-        Color(44, 255, 248, 251), Color(172, 255, 253, 254), Color(190, 255, 246, 250),
-        Color(132, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
-        Color(255, 130, 106, 117), Color(255, 196, 63, 115), Color(166, 253, 229, 239),
+    if (light && BackdropPreservesAlpha(backdrop)) return {
+        Color(10, 255, 247, 251), Color(242, 255, 246, 251), Color(250, 255, 251, 254),
+        Color(150, 229, 190, 209), Color(255, 52, 42, 50), Color(255, 106, 83, 96),
+        Color(255, 115, 91, 104), Color(255, 196, 63, 115), Color(224, 255, 226, 239),
         Color(255, 39, 122, 93), Color(255, 143, 90, 0), Color(255, 191, 52, 77)};
     if (light) return {
         Color(255, 255, 248, 251), Color(255, 255, 253, 254), Color(255, 255, 246, 250),
@@ -96,6 +96,10 @@ Color Blend(const Color& from, const Color& to, float amount) {
     const float t = std::clamp(amount, 0.0F, 1.0F);
     const auto channel = [t](BYTE a, BYTE b) { return static_cast<BYTE>(std::lround(static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t)); };
     return Color(channel(from.GetA(), to.GetA()), channel(from.GetR(), to.GetR()), channel(from.GetG(), to.GetG()), channel(from.GetB(), to.GetB()));
+}
+
+Color WithAlpha(const Color& color, BYTE alpha) {
+    return Color(alpha, color.GetR(), color.GetG(), color.GetB());
 }
 
 void DrawCherryPetal(Graphics& graphics, float x, float y, float size, float angle, BYTE alpha) {
@@ -182,7 +186,7 @@ void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palet
         return;
     }
 
-    const bool glass = backdrop != BackdropStyle::Solid;
+    const bool glass = BackdropPreservesAlpha(backdrop);
     if (glass) {
         const CompositingMode previous = graphics.GetCompositingMode();
         graphics.SetCompositingMode(CompositingModeSourceCopy);
@@ -190,7 +194,7 @@ void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palet
         graphics.FillRectangle(&clear, 0.0F, 0.0F, width, height);
         graphics.SetCompositingMode(previous);
         LinearGradientBrush glass_tint(RectF(0.0F, 0.0F, width, height),
-            Color(32, 255, 248, 251), Color(18, 247, 220, 235), 112.0F);
+            Color(10, 255, 247, 251), Color(4, 246, 220, 235), 112.0F);
         graphics.FillRectangle(&glass_tint, 0.0F, 0.0F, width, height);
     } else {
         LinearGradientBrush background(RectF(0.0F, 0.0F, width, height),
@@ -199,8 +203,8 @@ void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palet
     }
 
     // Broad, barely-visible blooms add depth without tinting cards or text.
-    SolidBrush upper_glow(Color(28, 255, 205, 224));
-    SolidBrush lower_glow(Color(18, 224, 190, 239));
+    SolidBrush upper_glow(glass ? Color(8, 255, 185, 211) : Color(28, 255, 205, 224));
+    SolidBrush lower_glow(glass ? Color(5, 211, 164, 230) : Color(18, 224, 190, 239));
     graphics.FillEllipse(&upper_glow, width * 0.62F, -height * 0.18F, width * 0.58F, height * 0.48F);
     graphics.FillEllipse(&lower_glow, -width * 0.22F, height * 0.68F, width * 0.56F, height * 0.42F);
 
@@ -863,6 +867,11 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     DrawWindowCanvas(graphics, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight),
         palette, light, ambient_phase, 1.0F, backdrop);
 
+    if (BackdropPreservesAlpha(backdrop)) {
+        FillRounded(graphics, R(8.0F, 6.0F, 384.0F, 50.0F), 12.0F, WithAlpha(palette.surface, 232));
+        StrokeRounded(graphics, R(8.0F, 6.0F, 384.0F, 50.0F), 12.0F, palette.border);
+    }
+
     DrawPartnerMark(graphics, R(14.0F, 12.0F, 38.0F, 38.0F));
     Text(graphics, L"Codex Partner", R(60.0F, 10.0F, 180.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
     const std::wstring header_context = identity_hidden ? T(chinese, L"Identity hidden", L"身份信息已隐藏") :
@@ -988,12 +997,16 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
     DrawWindowCanvas(graphics, static_cast<float>(kFloatBarWidth), static_cast<float>(kFloatBarHeight),
         palette, light, ambient_phase, 5.0F, backdrop);
 
+    if (BackdropPreservesAlpha(backdrop)) {
+        FillRounded(graphics, R(6.0F, 6.0F, 370.0F, 64.0F), 11.0F, WithAlpha(palette.surface, 242));
+    }
+
     if (hovered == FloatBarAction::OpenPopup) {
-        FillRounded(graphics, R(3.0F, 3.0F, 378.0F, 70.0F), 12.0F,
+        FillRounded(graphics, R(6.0F, 6.0F, 370.0F, 64.0F), 11.0F,
             Blend(palette.background, palette.accent_soft, hover_progress * 0.45F));
     }
     if (pressed == FloatBarAction::OpenPopup) {
-        StrokeRounded(graphics, R(4.0F, 4.0F, 376.0F, 68.0F), 11.0F, palette.accent);
+        StrokeRounded(graphics, R(7.0F, 7.0F, 368.0F, 62.0F), 10.0F, palette.accent);
     }
 
     DrawPartnerMark(graphics, R(10.0F, 16.0F, 42.0F, 42.0F));
@@ -1067,6 +1080,13 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     const Palette palette = Colors(light, backdrop);
     DrawWindowCanvas(graphics, static_cast<float>(kSettingsWidth), static_cast<float>(kSettingsHeight),
         palette, light, ambient_phase, 8.0F, backdrop);
+
+    if (BackdropPreservesAlpha(backdrop)) {
+        FillRounded(graphics, R(14.0F, 10.0F, 672.0F, 50.0F), 12.0F, WithAlpha(palette.surface, 232));
+        StrokeRounded(graphics, R(14.0F, 10.0F, 672.0F, 50.0F), 12.0F, palette.border);
+        FillRounded(graphics, R(204.0F, 70.0F, 476.0F, 618.0F), 12.0F, WithAlpha(palette.surface, 232));
+        StrokeRounded(graphics, R(204.0F, 70.0F, 476.0F, 618.0F), 12.0F, palette.border);
+    }
 
     Text(graphics, T(chinese, L"Codex Partner Settings", L"Codex Partner 设置"), R(28.0F, 20.0F, 360.0F, 36.0F), 24.0F, FontStyleBold, palette.text);
     const bool external_active = external_feedback.outcome != ExternalActionOutcome::Idle;
@@ -1284,6 +1304,9 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         }
     }
     if (hovered != SettingsAction::None) {
+        if (BackdropPreservesAlpha(backdrop)) {
+            FillRounded(graphics, R(214.0F, 694.0F, 454.0F, 22.0F), 8.0F, WithAlpha(palette.surface, 232));
+        }
         Text(graphics, SettingsActionHint(hovered, chinese), R(220.0F, 700.0F, 440.0F, 18.0F), 9.0F,
             FontStyleRegular, palette.accent, StringAlignmentCenter);
     }

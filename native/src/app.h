@@ -90,7 +90,7 @@ private:
     void RefreshAsync(bool retain_if_active = true);
     void StartRefreshCycle();
     [[nodiscard]] RefreshPhase CurrentRefreshPhase() const noexcept;
-    void ApplyTheme(HWND window);
+    void ApplyTheme(HWND window, std::optional<bool> active_override = std::nullopt);
     [[nodiscard]] ui::BackdropStyle BackdropStyleFor(HWND window) const noexcept;
     void SyncAmbientAnimationTimer();
     void TickAmbientAnimation();

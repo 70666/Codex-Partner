@@ -1,5 +1,6 @@
 #include "json.h"
 #include "accessibility_model.h"
+#include "backdrop_policy.h"
 #include "codex_cost_scanner.h"
 #include "codex_provider.h"
 #include "diagnostics.h"
@@ -76,6 +77,20 @@ int main(int argc, char** argv) {
         return 0;
     }
     {
+        using codex_partner::ui::BackdropStyle;
+        Require(codex_partner::ui::ResolveBackdropStyle(false, true, false) == BackdropStyle::Solid,
+            "glass capability is required for a transparent surface");
+        Require(codex_partner::ui::ResolveBackdropStyle(true, true, false) == BackdropStyle::AcrylicGlass,
+            "an active interactive panel uses system acrylic");
+        Require(codex_partner::ui::ResolveBackdropStyle(true, false, false) == BackdropStyle::TransparentGlass,
+            "an inactive panel avoids acrylic's opaque fallback");
+        Require(codex_partner::ui::ResolveBackdropStyle(true, true, true) == BackdropStyle::TransparentGlass,
+            "the persistent floating bar remains transparent");
+        Require(codex_partner::ui::BackdropPreservesAlpha(BackdropStyle::AcrylicGlass) &&
+                codex_partner::ui::BackdropPreservesAlpha(BackdropStyle::TransparentGlass) &&
+                !codex_partner::ui::BackdropPreservesAlpha(BackdropStyle::Solid),
+            "only glass surfaces preserve the redirection bitmap alpha");
+
         std::array<std::uint32_t, 4> glass_pixels{
             0x00123456U, 0x807D6E76U, 0x8040C020U, 0xFF342A32U};
         codex_partner::rendering::FinalizeBgra(glass_pixels, true);

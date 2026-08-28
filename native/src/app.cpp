@@ -190,7 +190,7 @@ void PaintDoubleBuffered(HWND window, HDC target, ui::BackdropStyle backdrop, Pa
     const SIZE_T pixel_count = static_cast<SIZE_T>(width) * static_cast<SIZE_T>(height);
     rendering::FinalizeBgra(
         std::span(static_cast<std::uint32_t*>(pixels), pixel_count),
-        backdrop == ui::BackdropStyle::AcrylicGlass);
+        ui::BackdropPreservesAlpha(backdrop));
     BitBlt(target, 0, 0, width, height, buffer, 0, 0, SRCCOPY);
     SelectObject(buffer, previous);
     DeleteObject(bitmap);
@@ -789,7 +789,7 @@ void App::TogglePopup() {
 }
 
 void App::ShowPopup() {
-    ApplyTheme(popup_);
+    ApplyTheme(popup_, true);
     RECT anchor_rect{};
     NOTIFYICONIDENTIFIER identifier{sizeof(identifier), tray_.hWnd, tray_.uID, {}};
     RECT icon_rect{};
@@ -836,6 +836,7 @@ void App::ShowPopup() {
     }
     SetForegroundWindow(popup_);
     SetFocus(popup_);
+    ApplyTheme(popup_, GetForegroundWindow() == popup_);
     if (RefreshIsActive(CurrentRefreshPhase()) && AnimationsEnabled()) SetTimer(popup_, kRefreshAnimationTimer, 16, nullptr);
     SyncAmbientAnimationTimer();
     InvalidateRect(popup_, nullptr, FALSE);
@@ -854,7 +855,7 @@ void App::HidePopup() {
 
 void App::ShowSettings() {
     HidePopup();
-    ApplyTheme(settings_window_);
+    ApplyTheme(settings_window_, true);
     SetWindowTextW(settings_window_, ShouldUseChinese(settings_.language) ? L"Codex Partner 设置" : L"Codex Partner Settings");
     if (!IsWindowVisible(settings_window_)) {
         RECT rect{};
@@ -868,6 +869,7 @@ void App::ShowSettings() {
     }
     ShowWindow(settings_window_, SW_SHOWNORMAL);
     SetForegroundWindow(settings_window_);
+    ApplyTheme(settings_window_, GetForegroundWindow() == settings_window_);
     SyncAmbientAnimationTimer();
     if (settings_tab_ == ui::SettingsTab::UsageSpend) {
         usage_chart_hover_.reset();
@@ -1554,7 +1556,7 @@ void App::TickFloatBarHoverAnimation() {
     InvalidateRect(float_bar_window_, nullptr, FALSE);
 }
 
-void App::ApplyTheme(HWND window) {
+void App::ApplyTheme(HWND window, std::optional<bool> active_override) {
     if (!window) return;
     const auto remember_backdrop = [&](ui::BackdropStyle style) {
         if (window == popup_) popup_backdrop_ = style;
@@ -1587,15 +1589,18 @@ void App::ApplyTheme(HWND window) {
     BOOL composition_enabled = FALSE;
     if (light && !proof_mode_ && SUCCEEDED(DwmIsCompositionEnabled(&composition_enabled)) && composition_enabled) {
         const MARGINS glass_margins{-1, -1, -1, -1};
-        const DWORD backdrop = kDwmSystemBackdropTransient;
         const HRESULT frame_result = DwmExtendFrameIntoClientArea(window, &glass_margins);
-        const HRESULT backdrop_result = DwmSetWindowAttribute(
-            window, kDwmwaSystemBackdropType, &backdrop, sizeof(backdrop));
-        if (SUCCEEDED(frame_result) && SUCCEEDED(backdrop_result)) {
-            const BOOL alpha = TRUE;
-            if (SUCCEEDED(DwmSetWindowAttribute(
-                window, kDwmwaRedirectionBitmapAlpha, &alpha, sizeof(alpha)))) {
-                backdrop_style = ui::BackdropStyle::AcrylicGlass;
+        const BOOL alpha = TRUE;
+        const HRESULT alpha_result = DwmSetWindowAttribute(
+            window, kDwmwaRedirectionBitmapAlpha, &alpha, sizeof(alpha));
+        if (SUCCEEDED(frame_result) && SUCCEEDED(alpha_result)) {
+            const bool active = active_override.value_or(GetForegroundWindow() == window);
+            backdrop_style = ui::ResolveBackdropStyle(true, active, window == float_bar_window_);
+            const DWORD backdrop = backdrop_style == ui::BackdropStyle::AcrylicGlass ?
+                kDwmSystemBackdropTransient : kDwmSystemBackdropNone;
+            if (FAILED(DwmSetWindowAttribute(
+                window, kDwmwaSystemBackdropType, &backdrop, sizeof(backdrop)))) {
+                backdrop_style = ui::BackdropStyle::Solid;
             }
         }
     }
@@ -2080,7 +2085,10 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             ActivatePopupAction(popup_hover_);
         }
         return 0;
-    case WM_ACTIVATE: return 0;
+    case WM_ACTIVATE:
+        ApplyTheme(window, LOWORD(wparam) != WA_INACTIVE);
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
     case WM_TIMER:
         if (wparam == kRefreshTimer) RefreshAsync(false);
         else if (wparam == kPressFeedbackTimer) {
@@ -2215,6 +2223,10 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 
 LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+    case WM_ACTIVATE:
+        ApplyTheme(window, LOWORD(wparam) != WA_INACTIVE);
+        InvalidateRect(window, nullptr, FALSE);
+        return DefWindowProcW(window, message, wparam, lparam);
     case WM_GETOBJECT: {
         const LRESULT result = accessibility::HandleGetObject(window, wparam, lparam);
         return result != 0 ? result : DefWindowProcW(window, message, wparam, lparam);
@@ -2415,6 +2427,10 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
 
 LRESULT App::OnFloatBarMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+    case WM_ACTIVATE:
+        ApplyTheme(window, LOWORD(wparam) != WA_INACTIVE);
+        InvalidateRect(window, nullptr, FALSE);
+        return 0;
     case WM_GETOBJECT: {
         const LRESULT result = accessibility::HandleGetObject(window, wparam, lparam);
         return result != 0 ? result : DefWindowProcW(window, message, wparam, lparam);

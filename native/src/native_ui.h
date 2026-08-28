@@ -1,5 +1,6 @@
 #pragma once
 
+#include "backdrop_policy.h"
 #include "settings_store.h"
 #include "external_action.h"
 #include "refresh_coordinator.h"
@@ -28,7 +29,6 @@ enum class PopupAction { None, CopySummary, Refresh, Settings, Close, Primary };
 enum class CopySummaryState { Idle, Copied, Failed };
 enum class FloatBarAction { None, OpenPopup, Hide };
 enum class SettingsTab { General, Providers, Notifications, FloatBar, UsageSpend, About };
-enum class BackdropStyle { Solid, AcrylicGlass };
 enum class SettingsAction {
     None,
     SelectGeneral,
