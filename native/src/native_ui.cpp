@@ -76,9 +76,9 @@ void DrawPartnerMark(Graphics& graphics, const RectF& rect) {
 
 Palette Colors(bool light, BackdropStyle backdrop) {
     if (light && backdrop == BackdropStyle::AcrylicGlass) return {
-        Color(154, 255, 248, 251), Color(228, 255, 253, 254), Color(214, 255, 246, 250),
-        Color(184, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
-        Color(255, 130, 106, 117), Color(255, 196, 63, 115), Color(216, 253, 229, 239),
+        Color(44, 255, 248, 251), Color(172, 255, 253, 254), Color(190, 255, 246, 250),
+        Color(132, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
+        Color(255, 130, 106, 117), Color(255, 196, 63, 115), Color(166, 253, 229, 239),
         Color(255, 39, 122, 93), Color(255, 143, 90, 0), Color(255, 191, 52, 77)};
     if (light) return {
         Color(255, 255, 248, 251), Color(255, 255, 253, 254), Color(255, 255, 246, 250),
@@ -190,7 +190,7 @@ void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palet
         graphics.FillRectangle(&clear, 0.0F, 0.0F, width, height);
         graphics.SetCompositingMode(previous);
         LinearGradientBrush glass_tint(RectF(0.0F, 0.0F, width, height),
-            Color(166, 255, 253, 254), Color(126, 255, 238, 246), 112.0F);
+            Color(32, 255, 248, 251), Color(18, 247, 220, 235), 112.0F);
         graphics.FillRectangle(&glass_tint, 0.0F, 0.0F, width, height);
     } else {
         LinearGradientBrush background(RectF(0.0F, 0.0F, width, height),
