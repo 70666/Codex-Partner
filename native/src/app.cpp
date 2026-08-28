@@ -183,6 +183,17 @@ bool AnimationsEnabled() noexcept {
     return enabled != FALSE;
 }
 
+bool DecorativeEffectsEnabled() noexcept {
+    HIGHCONTRASTW contrast{sizeof(contrast)};
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0) &&
+        (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0) return false;
+#ifdef SPI_GETDISABLEOVERLAPPEDCONTENT
+    BOOL disabled = FALSE;
+    if (SystemParametersInfoW(SPI_GETDISABLEOVERLAPPEDCONTENT, 0, &disabled, 0) && disabled != FALSE) return false;
+#endif
+    return true;
+}
+
 bool FindPngEncoder(CLSID& encoder) {
     UINT count = 0;
     UINT bytes = 0;
@@ -380,6 +391,14 @@ bool App::Initialize(int show_command) {
             ApplyTheme(popup_);
             ApplyTheme(settings_window_);
             ApplyTheme(float_bar_window_);
+        }
+        const std::wstring proof_ambient_phase = EnvironmentValue(L"CODEX_PARTNER_PROOF_AMBIENT_PHASE");
+        if (!proof_ambient_phase.empty()) {
+            try {
+                ambient_animation_phase_ = std::clamp(std::stod(proof_ambient_phase), 0.0, 86'400.0);
+            } catch (...) {
+                ambient_animation_phase_ = 12.0;
+            }
         }
         const std::wstring proof_privacy = EnvironmentValue(L"CODEX_PARTNER_PROOF_PRIVACY");
         if (proof_privacy == L"hidden") settings_.hide_identity = true;
@@ -798,6 +817,7 @@ void App::ShowPopup() {
     SetForegroundWindow(popup_);
     SetFocus(popup_);
     if (RefreshIsActive(CurrentRefreshPhase()) && AnimationsEnabled()) SetTimer(popup_, kRefreshAnimationTimer, 16, nullptr);
+    SyncAmbientAnimationTimer();
     InvalidateRect(popup_, nullptr, FALSE);
     MaybeRefreshOnOpen();
 }
@@ -809,6 +829,7 @@ void App::HidePopup() {
     popup_hover_progress_ = 0.0F;
     popup_activation_handoff_pending_ = false;
     ShowWindow(popup_, SW_HIDE);
+    SyncAmbientAnimationTimer();
 }
 
 void App::ShowSettings() {
@@ -827,6 +848,7 @@ void App::ShowSettings() {
     }
     ShowWindow(settings_window_, SW_SHOWNORMAL);
     SetForegroundWindow(settings_window_);
+    SyncAmbientAnimationTimer();
     if (settings_tab_ == ui::SettingsTab::UsageSpend) {
         usage_chart_hover_.reset();
         // Render a visible first frame immediately, then grow the series. A
@@ -845,6 +867,7 @@ void App::HideSettings() {
     settings_hover_ = ui::SettingsAction::None;
     settings_hover_progress_ = 0.0F;
     ShowWindow(settings_window_, SW_HIDE);
+    SyncAmbientAnimationTimer();
 }
 
 void App::ShowFloatBar(bool activate) {
@@ -881,6 +904,7 @@ void App::ShowFloatBar(bool activate) {
         SetForegroundWindow(float_bar_window_);
         SetFocus(float_bar_window_);
     }
+    SyncAmbientAnimationTimer();
     InvalidateRect(float_bar_window_, nullptr, FALSE);
 }
 
@@ -891,6 +915,7 @@ void App::HideFloatBar(bool persist) {
     float_bar_pressed_ = ui::FloatBarAction::None;
     float_bar_hover_progress_ = 0.0F;
     ShowWindow(float_bar_window_, SW_HIDE);
+    SyncAmbientAnimationTimer();
     if (persist && settings_.show_float_bar) {
         settings_.show_float_bar = false;
         SaveSettings();
@@ -1510,14 +1535,43 @@ void App::TickFloatBarHoverAnimation() {
 }
 
 void App::ApplyTheme(HWND window) const {
+    if (!DecorativeEffectsEnabled()) {
+        const COLORREF system_default = 0xFFFFFFFF;
+        DwmSetWindowAttribute(window, 34, &system_default, sizeof(system_default));
+        DwmSetWindowAttribute(window, 35, &system_default, sizeof(system_default));
+        DwmSetWindowAttribute(window, 36, &system_default, sizeof(system_default));
+        return;
+    }
     const bool light = ShouldUseLightTheme(settings_.theme);
     const BOOL dark = light ? FALSE : TRUE;
     DwmSetWindowAttribute(window, 20, &dark, sizeof(dark));
-    const COLORREF caption = light ? RGB(246, 248, 251) : RGB(24, 25, 28);
-    const COLORREF caption_text = light ? RGB(28, 31, 36) : RGB(244, 245, 247);
+    const COLORREF caption = light ? RGB(255, 248, 251) : RGB(24, 25, 28);
+    const COLORREF caption_text = light ? RGB(52, 42, 50) : RGB(244, 245, 247);
     DwmSetWindowAttribute(window, 34, &caption, sizeof(caption));
     DwmSetWindowAttribute(window, 35, &caption, sizeof(caption));
     DwmSetWindowAttribute(window, 36, &caption_text, sizeof(caption_text));
+}
+
+void App::SyncAmbientAnimationTimer() {
+    KillTimer(popup_, kAmbientAnimationTimer);
+    // The always-on floating bar stays on a still frame when it is the only
+    // visible surface. Animate only while the user is actively viewing a panel.
+    const bool interactive_surface_visible = IsWindowVisible(popup_) || IsWindowVisible(settings_window_);
+    if (!proof_mode_ && interactive_surface_visible && ShouldUseLightTheme(settings_.theme) &&
+        DecorativeEffectsEnabled() && AnimationsEnabled()) {
+        ambient_animation_tick_ = std::chrono::steady_clock::now();
+        SetTimer(popup_, kAmbientAnimationTimer, 50, nullptr);
+    }
+}
+
+void App::TickAmbientAnimation() {
+    const auto now = std::chrono::steady_clock::now();
+    const double elapsed = std::clamp(std::chrono::duration<double>(now - ambient_animation_tick_).count(), 0.0, 0.1);
+    ambient_animation_tick_ = now;
+    ambient_animation_phase_ += elapsed;
+    if (IsWindowVisible(popup_)) InvalidateRect(popup_, nullptr, FALSE);
+    if (IsWindowVisible(settings_window_)) InvalidateRect(settings_window_, nullptr, FALSE);
+    if (IsWindowVisible(float_bar_window_)) InvalidateRect(float_bar_window_, nullptr, FALSE);
 }
 
 bool App::SaveSettings() {
@@ -1548,6 +1602,7 @@ void App::SyncSettingsPresentation() {
     RestartRefreshTimer();
     if (settings_.show_float_bar) ShowFloatBar(false);
     else HideFloatBar(false);
+    SyncAmbientAnimationTimer();
 }
 
 void App::ShowSettingsSaveFailure() {
@@ -1744,6 +1799,7 @@ void App::Quit() {
     if (refresh_thread_.joinable()) refresh_thread_.request_stop();
     if (update_thread_.joinable()) update_thread_.request_stop();
     RemoveTrayIcon();
+    DestroyWindow(float_bar_window_);
     DestroyWindow(settings_window_);
     DestroyWindow(popup_);
     PostQuitMessage(0);
@@ -1863,7 +1919,8 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         const UsageSnapshot snapshot = SnapshotCopy();
         ui::PaintPopup(window, reinterpret_cast<HDC>(wparam), snapshot, ShouldUseLightTheme(settings_.theme),
             ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_,
-            popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_);
+            popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_,
+            DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         return 0;
     }
     case WM_PAINT: {
@@ -1871,7 +1928,7 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         HDC dc = BeginPaint(window, &paint);
         const UsageSnapshot snapshot = SnapshotCopy();
         PaintDoubleBuffered(window, dc, [&](HDC buffer) {
-            ui::PaintPopup(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_, popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_);
+            ui::PaintPopup(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_, popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         });
         EndPaint(window, &paint);
         return 0;
@@ -1970,6 +2027,7 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             refresh_angle_ = std::fmod(refresh_angle_ + 12.0F, 360.0F);
             InvalidateRect(window, nullptr, FALSE);
         } else if (wparam == kHoverAnimationTimer) TickPopupHoverAnimation();
+        else if (wparam == kAmbientAnimationTimer) TickAmbientAnimation();
         else if (wparam == kTrayClickTimer) {
             KillTimer(window, kTrayClickTimer);
             if (tray_double_click_suppressed_) {
@@ -2063,13 +2121,32 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         SetWindowPos(window, nullptr, suggested->left, suggested->top, suggested->right - suggested->left, suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
         return 0;
     }
-    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+    case WM_SYSCOLORCHANGE:
+    case WM_SETTINGCHANGE: {
+        if (!AnimationsEnabled()) {
+            KillTimer(popup_, kRefreshAnimationTimer);
+            KillTimer(popup_, kHoverAnimationTimer);
+            KillTimer(settings_window_, kHoverAnimationTimer);
+            KillTimer(settings_window_, kUsageChartAnimationTimer);
+            KillTimer(float_bar_window_, kHoverAnimationTimer);
+            refresh_angle_ = 0.0F;
+            popup_hover_progress_ = popup_hover_ == ui::PopupAction::None ? 0.0F : 1.0F;
+            settings_hover_progress_ = settings_hover_ == ui::SettingsAction::None ? 0.0F : 1.0F;
+            float_bar_hover_progress_ = float_bar_hover_ == ui::FloatBarAction::None ? 0.0F : 1.0F;
+            usage_chart_progress_ = 1.0F;
+        } else if (RefreshIsActive(CurrentRefreshPhase()) && IsWindowVisible(popup_)) {
+            SetTimer(popup_, kRefreshAnimationTimer, 16, nullptr);
+        }
         ApplyTheme(window);
+        ApplyTheme(settings_window_);
+        ApplyTheme(float_bar_window_);
+        SyncAmbientAnimationTimer();
         InvalidateRect(window, nullptr, FALSE);
         InvalidateRect(settings_window_, nullptr, FALSE);
-        ApplyTheme(float_bar_window_);
         InvalidateRect(float_bar_window_, nullptr, FALSE);
         return 0;
+    }
     case WM_DESTROY: return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
@@ -2130,7 +2207,7 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         ui::PaintSettings(window, reinterpret_cast<HDC>(wparam), settings_, snapshot, update_check_, settings_tab_,
             ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_,
             diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_,
-            usage_chart_hover_, usage_chart_progress_);
+            usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         return 0;
     }
     case WM_PAINT: {
@@ -2138,7 +2215,7 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         HDC dc = BeginPaint(window, &paint);
         const UsageSnapshot snapshot = SnapshotCopy();
         PaintDoubleBuffered(window, dc, [&](HDC buffer) {
-            ui::PaintSettings(window, buffer, settings_, snapshot, update_check_, settings_tab_, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_, diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_, usage_chart_hover_, usage_chart_progress_);
+            ui::PaintSettings(window, buffer, settings_, snapshot, update_check_, settings_tab_, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_, diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_, usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         });
         EndPaint(window, &paint);
         return 0;
@@ -2317,7 +2394,7 @@ LRESULT App::OnFloatBarMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         const UsageSnapshot snapshot = SnapshotCopy();
         ui::PaintFloatBar(window, reinterpret_cast<HDC>(wparam), snapshot, ShouldUseLightTheme(settings_.theme),
             ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), float_bar_hover_, float_bar_pressed_,
-            float_bar_hover_progress_);
+            float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         return 0;
     }
     case WM_PAINT: {
@@ -2327,7 +2404,7 @@ LRESULT App::OnFloatBarMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         PaintDoubleBuffered(window, dc, [&](HDC buffer) {
             ui::PaintFloatBar(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme),
                 ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), float_bar_hover_,
-                float_bar_pressed_, float_bar_hover_progress_);
+                float_bar_pressed_, float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
         });
         EndPaint(window, &paint);
         return 0;

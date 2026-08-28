@@ -76,10 +76,10 @@ void DrawPartnerMark(Graphics& graphics, const RectF& rect) {
 
 Palette Colors(bool light) {
     if (light) return {
-        Color(255, 246, 248, 251), Color(255, 255, 255, 255), Color(255, 249, 250, 252),
-        Color(255, 224, 228, 234), Color(255, 28, 31, 36), Color(255, 91, 99, 111),
-        Color(255, 132, 140, 152), Color(255, 0, 120, 212), Color(255, 229, 243, 255),
-        Color(255, 24, 154, 93), Color(255, 204, 137, 0), Color(255, 215, 58, 73)};
+        Color(255, 255, 248, 251), Color(255, 255, 253, 254), Color(255, 255, 246, 250),
+        Color(255, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
+        Color(255, 130, 106, 117), Color(255, 196, 63, 115), Color(255, 253, 229, 239),
+        Color(255, 39, 122, 93), Color(255, 143, 90, 0), Color(255, 191, 52, 77)};
     return {
         Color(255, 24, 25, 28), Color(255, 34, 36, 41), Color(255, 41, 43, 49),
         Color(255, 60, 63, 71), Color(255, 244, 245, 247), Color(255, 174, 179, 189),
@@ -91,6 +91,81 @@ Color Blend(const Color& from, const Color& to, float amount) {
     const float t = std::clamp(amount, 0.0F, 1.0F);
     const auto channel = [t](BYTE a, BYTE b) { return static_cast<BYTE>(std::lround(static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t)); };
     return Color(channel(from.GetA(), to.GetA()), channel(from.GetR(), to.GetR()), channel(from.GetG(), to.GetG()), channel(from.GetB(), to.GetB()));
+}
+
+void DrawCherryPetal(Graphics& graphics, float x, float y, float size, float angle, BYTE alpha) {
+    const GraphicsState state = graphics.Save();
+    graphics.TranslateTransform(x, y);
+    graphics.RotateTransform(angle);
+    GraphicsPath petal;
+    petal.StartFigure();
+    petal.AddBezier(0.0F, -size, size * 0.78F, -size * 0.62F,
+        size * 0.62F, size * 0.48F, 0.0F, size);
+    petal.AddBezier(0.0F, size, -size * 0.62F, size * 0.48F,
+        -size * 0.78F, -size * 0.62F, 0.0F, -size);
+    petal.CloseFigure();
+    SolidBrush fill(Color(alpha, 244, 136, 177));
+    Pen edge(Color(static_cast<BYTE>(std::min(255, static_cast<int>(alpha) + 22)), 222, 91, 145), 0.65F);
+    graphics.FillPath(&fill, &petal);
+    graphics.DrawPath(&edge, &petal);
+    SolidBrush highlight(Color(static_cast<BYTE>(alpha / 2), 255, 240, 247));
+    graphics.FillEllipse(&highlight, -size * 0.18F, -size * 0.68F, size * 0.36F, size * 0.56F);
+    graphics.Restore(state);
+}
+
+void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palette& palette,
+    bool light, double ambient_phase, float variant) {
+    if (!light || ambient_phase < 0.0) {
+        SolidBrush background(palette.background);
+        graphics.FillRectangle(&background, 0.0F, 0.0F, width, height);
+        return;
+    }
+
+    LinearGradientBrush background(RectF(0.0F, 0.0F, width, height),
+        Color(255, 255, 252, 253), palette.background, 112.0F);
+    graphics.FillRectangle(&background, 0.0F, 0.0F, width, height);
+
+    // Broad, barely-visible blooms add depth without tinting cards or text.
+    SolidBrush upper_glow(Color(28, 255, 205, 224));
+    SolidBrush lower_glow(Color(18, 224, 190, 239));
+    graphics.FillEllipse(&upper_glow, width * 0.62F, -height * 0.18F, width * 0.58F, height * 0.48F);
+    graphics.FillEllipse(&lower_glow, -width * 0.22F, height * 0.68F, width * 0.56F, height * 0.42F);
+
+    struct PetalSeed {
+        float x;
+        float y;
+        float speed;
+        float sway;
+        float size;
+        float phase;
+        float spin;
+        BYTE alpha;
+    };
+    static constexpr std::array<PetalSeed, 12> seeds{{
+        {0.05F, 0.08F, 9.0F, 13.0F, 3.3F, 0.2F, 17.0F, 54},
+        {0.16F, 0.58F, 6.5F, 9.0F, 2.6F, 2.1F, -13.0F, 42},
+        {0.28F, 0.22F, 8.0F, 17.0F, 4.1F, 4.3F, 11.0F, 50},
+        {0.39F, 0.78F, 5.8F, 11.0F, 2.8F, 1.4F, -19.0F, 38},
+        {0.49F, 0.42F, 7.2F, 15.0F, 3.6F, 5.2F, 15.0F, 48},
+        {0.61F, 0.12F, 8.8F, 10.0F, 2.5F, 3.2F, -16.0F, 40},
+        {0.71F, 0.69F, 6.0F, 18.0F, 4.0F, 0.9F, 12.0F, 46},
+        {0.82F, 0.31F, 7.8F, 12.0F, 3.0F, 2.8F, -14.0F, 52},
+        {0.93F, 0.83F, 5.5F, 10.0F, 2.7F, 4.7F, 18.0F, 38},
+        {0.12F, 0.91F, 6.8F, 14.0F, 3.5F, 3.7F, -11.0F, 45},
+        {0.55F, 0.94F, 7.4F, 9.0F, 2.4F, 1.8F, 20.0F, 36},
+        {0.88F, 0.06F, 8.3F, 16.0F, 3.8F, 5.8F, -17.0F, 48}
+    }};
+    const std::size_t count = height < 120.0F ? 4 : width < 500.0F ? 8 : seeds.size();
+    for (std::size_t index = 0; index < count; ++index) {
+        const PetalSeed& seed = seeds[(index + static_cast<std::size_t>(variant)) % seeds.size()];
+        const float travel = height + 36.0F;
+        const float y = static_cast<float>(std::fmod(seed.y * height + ambient_phase * seed.speed + variant * 19.0F,
+            static_cast<double>(travel))) - 18.0F;
+        const float base_x = seed.x * width;
+        const float x = base_x + static_cast<float>(std::sin(ambient_phase * 0.72 + seed.phase + variant)) * seed.sway;
+        const float angle = static_cast<float>(std::fmod(ambient_phase * seed.spin + seed.phase * 31.0F, 360.0));
+        DrawCherryPetal(graphics, x, y, seed.size, angle, seed.alpha);
+    }
 }
 
 float Scale(HWND window) {
@@ -392,7 +467,7 @@ std::wstring ChartDate(std::size_t index, bool chinese) {
     return output.str();
 }
 
-void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Palette& palette, bool chinese,
+void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Palette& palette, bool light, bool chinese,
     std::optional<std::size_t> hovered_day, float progress) {
     const RectF card{214.0F, 258.0F, 454.0F, 216.0F};
     const RectF plot{232.0F, 322.0F, 418.0F, 116.0F};
@@ -404,10 +479,16 @@ void DrawUsageWaveChart(Graphics& graphics, const SpendSummary& spend, const Pal
         R(232.0F, 291.0F, 400.0F, 18.0F), 9.0F, FontStyleRegular, palette.secondary);
 
     const auto series = BuildChartSeries(spend);
-    const std::array<Color, 4> fills{Color(174, 27, 92, 214), Color(168, 47, 128, 237),
-        Color(160, 91, 174, 255), Color(150, 147, 197, 253)};
-    const std::array<Color, 4> strokes{Color(255, 21, 74, 180), Color(255, 37, 99, 220),
-        Color(255, 76, 150, 244), Color(255, 125, 176, 238)};
+    const std::array<Color, 4> fills = light ?
+        std::array<Color, 4>{Color(166, 214, 54, 118), Color(158, 232, 91, 148),
+            Color(150, 191, 116, 205), Color(142, 240, 170, 198)} :
+        std::array<Color, 4>{Color(174, 27, 92, 214), Color(168, 47, 128, 237),
+            Color(160, 91, 174, 255), Color(150, 147, 197, 253)};
+    const std::array<Color, 4> strokes = light ?
+        std::array<Color, 4>{Color(255, 180, 35, 91), Color(255, 204, 61, 118),
+            Color(255, 143, 78, 174), Color(255, 178, 75, 124)} :
+        std::array<Color, 4>{Color(255, 21, 74, 180), Color(255, 37, 99, 220),
+            Color(255, 76, 150, 244), Color(255, 125, 176, 238)};
 
     Pen grid_pen(Color(palette.border.GetA(), palette.border.GetR(), palette.border.GetG(), palette.border.GetB()), 1.0F);
     grid_pen.SetDashStyle(DashStyleDash);
@@ -694,7 +775,7 @@ void DrawSetupStep(Graphics& graphics, float y, const wchar_t* number, const wch
 
 void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase,
     CopySummaryState copy_state, ExternalActionFeedback external_feedback, PopupAction hovered, PopupAction pressed,
-    float hover_progress, float refresh_angle, bool refresh_queued, GlobalShortcut global_shortcut) {
+    float hover_progress, float refresh_angle, bool refresh_queued, GlobalShortcut global_shortcut, double ambient_phase) {
     const bool refreshing = RefreshIsActive(refresh_phase);
     const bool scanning_spend = refresh_phase == RefreshPhase::ScanningSpend;
     const PopupLayout layout = ResolvePopupLayout(snapshot);
@@ -704,8 +785,8 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
     graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
-    SolidBrush background(palette.background);
-    graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight));
+    DrawWindowCanvas(graphics, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight),
+        palette, light, ambient_phase, 1.0F);
 
     DrawPartnerMark(graphics, R(14.0F, 12.0F, 38.0F, 38.0F));
     Text(graphics, L"Codex Partner", R(60.0F, 10.0F, 180.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
@@ -813,7 +894,8 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
 }
 
 void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese,
-    bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress) {
+    bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress,
+    double ambient_phase) {
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -821,8 +903,8 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
     const auto pace = MostUrgentPaceForecast(snapshot);
-    SolidBrush background(palette.background);
-    graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kFloatBarWidth), static_cast<float>(kFloatBarHeight));
+    DrawWindowCanvas(graphics, static_cast<float>(kFloatBarWidth), static_cast<float>(kFloatBarHeight),
+        palette, light, ambient_phase, 5.0F);
 
     if (hovered == FloatBarAction::OpenPopup) {
         FillRounded(graphics, R(3.0F, 3.0F, 378.0F, 70.0F), 12.0F,
@@ -891,15 +973,15 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     const UpdateCheckState& update, SettingsTab tab, bool light, bool chinese, SettingsPersistenceState persistence,
     bool diagnostics_copied, ExternalActionFeedback external_feedback, RefreshPhase refresh_phase, SettingsAction hovered, SettingsAction pressed,
     float hover_progress, GlobalShortcutStatus global_shortcut_status, std::optional<std::size_t> usage_chart_hover,
-    float usage_chart_progress) {
+    float usage_chart_progress, double ambient_phase) {
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
     const Palette palette = Colors(light);
-    SolidBrush background(palette.background);
-    graphics.FillRectangle(&background, 0.0F, 0.0F, static_cast<float>(kSettingsWidth), static_cast<float>(kSettingsHeight));
+    DrawWindowCanvas(graphics, static_cast<float>(kSettingsWidth), static_cast<float>(kSettingsHeight),
+        palette, light, ambient_phase, 8.0F);
 
     Text(graphics, T(chinese, L"Codex Partner Settings", L"Codex Partner 设置"), R(28.0F, 20.0F, 360.0F, 36.0F), 24.0F, FontStyleBold, palette.text);
     const bool external_active = external_feedback.outcome != ExternalActionOutcome::Idle;
@@ -1016,7 +1098,7 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         DrawSpendMetric(graphics, 214.0F, 142.0F, 142.0F, T(chinese, L"LAST 1 DAY", L"近 1 天"), spend.one_day_usd, spend.one_day_partial, palette, chinese);
         DrawSpendMetric(graphics, 370.0F, 142.0F, 142.0F, T(chinese, L"LAST 7 DAYS", L"近 7 天"), spend.seven_day_usd, spend.seven_day_partial, palette, chinese);
         DrawSpendMetric(graphics, 526.0F, 142.0F, 142.0F, T(chinese, L"LAST 30 DAYS", L"近 30 天"), spend.thirty_day_usd, spend.thirty_day_partial, palette, chinese);
-        DrawUsageWaveChart(graphics, spend, palette, chinese, usage_chart_hover, usage_chart_progress);
+        DrawUsageWaveChart(graphics, spend, palette, light, chinese, usage_chart_hover, usage_chart_progress);
         DrawTopProjects(graphics, spend, palette, chinese, settings.hide_identity);
         std::wstring coverage;
         if (const auto event_percent = SpendPricingCoveragePercent(spend)) {

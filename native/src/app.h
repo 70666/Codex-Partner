@@ -49,6 +49,7 @@ private:
     static constexpr UINT_PTR kSnoozeStatusTimer = 8;
     static constexpr UINT_PTR kUsageChartAnimationTimer = 9;
     static constexpr UINT_PTR kTrayClickTimer = 10;
+    static constexpr UINT_PTR kAmbientAnimationTimer = 11;
     static constexpr int kGlobalShortcutId = 1;
 
     static LRESULT CALLBACK PopupProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -90,6 +91,8 @@ private:
     void StartRefreshCycle();
     [[nodiscard]] RefreshPhase CurrentRefreshPhase() const noexcept;
     void ApplyTheme(HWND window) const;
+    void SyncAmbientAnimationTimer();
+    void TickAmbientAnimation();
     bool SaveSettings();
     void SyncSettingsPresentation();
     void ShowSettingsSaveFailure();
@@ -181,6 +184,8 @@ private:
     float settings_hover_progress_ = 0.0F;
     float float_bar_hover_progress_ = 0.0F;
     float refresh_angle_ = 0.0F;
+    double ambient_animation_phase_ = 12.0;
+    std::chrono::steady_clock::time_point ambient_animation_tick_ = std::chrono::steady_clock::now();
     std::optional<std::size_t> usage_chart_hover_;
     float usage_chart_progress_ = 1.0F;
     bool popup_activation_handoff_pending_ = false;
