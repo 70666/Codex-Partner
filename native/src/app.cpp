@@ -7,6 +7,7 @@
 #include "interaction_model.h"
 #include "json.h"
 #include "native_ui.h"
+#include "premultiplied_surface.h"
 #include "resource.h"
 #include "tray_icon_win32.h"
 #include "usage_freshness.h"
@@ -65,6 +66,10 @@ constexpr UINT kShortcutDisabled = 2601;
 constexpr UINT kShortcutCtrlShiftU = 2602;
 constexpr UINT kShortcutCtrlAltU = 2603;
 constexpr UINT kShortcutCtrlShiftSpace = 2604;
+constexpr auto kDwmwaSystemBackdropType = static_cast<DWMWINDOWATTRIBUTE>(38);
+constexpr auto kDwmwaRedirectionBitmapAlpha = static_cast<DWMWINDOWATTRIBUTE>(39);
+constexpr DWORD kDwmSystemBackdropNone = 1;
+constexpr DWORD kDwmSystemBackdropTransient = 3;
 
 UINT EffectiveDpiForMonitor(HMONITOR monitor) noexcept {
     UINT dpi_x = 0;
@@ -156,21 +161,36 @@ SIZE WindowSizeForClient(int client_width, int client_height, DWORD style, DWORD
 }
 
 template <typename Painter>
-void PaintDoubleBuffered(HWND window, HDC target, Painter&& painter) {
+void PaintDoubleBuffered(HWND window, HDC target, ui::BackdropStyle backdrop, Painter&& painter) {
     RECT client{};
     GetClientRect(window, &client);
     const int width = client.right - client.left;
     const int height = client.bottom - client.top;
     HDC buffer = CreateCompatibleDC(target);
-    HBITMAP bitmap = width > 0 && height > 0 ? CreateCompatibleBitmap(target, width, height) : nullptr;
-    if (!buffer || !bitmap) {
+    BITMAPINFO bitmap_info{};
+    bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bitmap_info.bmiHeader.biWidth = width;
+    bitmap_info.bmiHeader.biHeight = -height;
+    bitmap_info.bmiHeader.biPlanes = 1;
+    bitmap_info.bmiHeader.biBitCount = 32;
+    bitmap_info.bmiHeader.biCompression = BI_RGB;
+    void* pixels = nullptr;
+    HBITMAP bitmap = width > 0 && height > 0 ?
+        CreateDIBSection(target, &bitmap_info, DIB_RGB_COLORS, &pixels, nullptr, 0) : nullptr;
+    if (!buffer || !bitmap || !pixels) {
         if (bitmap) DeleteObject(bitmap);
         if (buffer) DeleteDC(buffer);
         painter(target);
         return;
     }
+    ZeroMemory(pixels, static_cast<SIZE_T>(width) * static_cast<SIZE_T>(height) * 4U);
     HGDIOBJ previous = SelectObject(buffer, bitmap);
     painter(buffer);
+    GdiFlush();
+    const SIZE_T pixel_count = static_cast<SIZE_T>(width) * static_cast<SIZE_T>(height);
+    rendering::FinalizeBgra(
+        std::span(static_cast<std::uint32_t*>(pixels), pixel_count),
+        backdrop == ui::BackdropStyle::AcrylicGlass);
     BitBlt(target, 0, 0, width, height, buffer, 0, 0, SRCCOPY);
     SelectObject(buffer, previous);
     DeleteObject(bitmap);
@@ -368,6 +388,7 @@ bool App::Initialize(int show_command) {
     if (Gdiplus::GdiplusStartup(&gdiplus_token_, &input, nullptr) != Gdiplus::Ok) return false;
     OutputDebugStringW(L"[CodexPartner] GDI+ ready\n");
     taskbar_created_message_ = RegisterWindowMessageW(L"TaskbarCreated");
+    proof_mode_ = !EnvironmentValue(L"CODEX_PARTNER_PROOF_MODE").empty();
     if (!RegisterWindows() || !CreateWindows()) return false;
     activation_thread_ = std::jthread([this](std::stop_token stop) {
         while (!stop.stop_requested()) {
@@ -379,7 +400,6 @@ bool App::Initialize(int show_command) {
     });
     OutputDebugStringW(L"[CodexPartner] windows created\n");
     const std::wstring proof = EnvironmentValue(L"CODEX_PARTNER_PROOF_MODE");
-    proof_mode_ = !proof.empty();
     if (!proof.empty()) {
         const std::wstring proof_language = EnvironmentValue(L"CODEX_PARTNER_PROOF_LANGUAGE");
         if (proof_language == L"zh-CN") settings_.language = LanguageMode::SimplifiedChinese;
@@ -1534,8 +1554,25 @@ void App::TickFloatBarHoverAnimation() {
     InvalidateRect(float_bar_window_, nullptr, FALSE);
 }
 
-void App::ApplyTheme(HWND window) const {
+void App::ApplyTheme(HWND window) {
+    if (!window) return;
+    const auto remember_backdrop = [&](ui::BackdropStyle style) {
+        if (window == popup_) popup_backdrop_ = style;
+        else if (window == settings_window_) settings_backdrop_ = style;
+        else if (window == float_bar_window_) float_bar_backdrop_ = style;
+    };
+    const auto remove_backdrop = [&]() {
+        const BOOL alpha = FALSE;
+        const DWORD backdrop = kDwmSystemBackdropNone;
+        const MARGINS margins{0, 0, 0, 0};
+        DwmSetWindowAttribute(window, kDwmwaRedirectionBitmapAlpha, &alpha, sizeof(alpha));
+        DwmSetWindowAttribute(window, kDwmwaSystemBackdropType, &backdrop, sizeof(backdrop));
+        DwmExtendFrameIntoClientArea(window, &margins);
+        remember_backdrop(ui::BackdropStyle::Solid);
+    };
+
     if (!DecorativeEffectsEnabled()) {
+        remove_backdrop();
         const COLORREF system_default = 0xFFFFFFFF;
         DwmSetWindowAttribute(window, 34, &system_default, sizeof(system_default));
         DwmSetWindowAttribute(window, 35, &system_default, sizeof(system_default));
@@ -1545,11 +1582,38 @@ void App::ApplyTheme(HWND window) const {
     const bool light = ShouldUseLightTheme(settings_.theme);
     const BOOL dark = light ? FALSE : TRUE;
     DwmSetWindowAttribute(window, 20, &dark, sizeof(dark));
+
+    ui::BackdropStyle backdrop_style = ui::BackdropStyle::Solid;
+    BOOL composition_enabled = FALSE;
+    if (light && !proof_mode_ && SUCCEEDED(DwmIsCompositionEnabled(&composition_enabled)) && composition_enabled) {
+        const MARGINS glass_margins{-1, -1, -1, -1};
+        const DWORD backdrop = kDwmSystemBackdropTransient;
+        const HRESULT frame_result = DwmExtendFrameIntoClientArea(window, &glass_margins);
+        const HRESULT backdrop_result = DwmSetWindowAttribute(
+            window, kDwmwaSystemBackdropType, &backdrop, sizeof(backdrop));
+        if (SUCCEEDED(frame_result) && SUCCEEDED(backdrop_result)) {
+            const BOOL alpha = TRUE;
+            if (SUCCEEDED(DwmSetWindowAttribute(
+                window, kDwmwaRedirectionBitmapAlpha, &alpha, sizeof(alpha)))) {
+                backdrop_style = ui::BackdropStyle::AcrylicGlass;
+            }
+        }
+    }
+    if (backdrop_style == ui::BackdropStyle::Solid) remove_backdrop();
+    else remember_backdrop(backdrop_style);
+
     const COLORREF caption = light ? RGB(255, 248, 251) : RGB(24, 25, 28);
     const COLORREF caption_text = light ? RGB(52, 42, 50) : RGB(244, 245, 247);
     DwmSetWindowAttribute(window, 34, &caption, sizeof(caption));
     DwmSetWindowAttribute(window, 35, &caption, sizeof(caption));
     DwmSetWindowAttribute(window, 36, &caption_text, sizeof(caption_text));
+}
+
+ui::BackdropStyle App::BackdropStyleFor(HWND window) const noexcept {
+    if (window == popup_) return popup_backdrop_;
+    if (window == settings_window_) return settings_backdrop_;
+    if (window == float_bar_window_) return float_bar_backdrop_;
+    return ui::BackdropStyle::Solid;
 }
 
 void App::SyncAmbientAnimationTimer() {
@@ -1920,15 +1984,15 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         ui::PaintPopup(window, reinterpret_cast<HDC>(wparam), snapshot, ShouldUseLightTheme(settings_.theme),
             ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_,
             popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_,
-            DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+            DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0, BackdropStyleFor(window));
         return 0;
     }
     case WM_PAINT: {
         PAINTSTRUCT paint{};
         HDC dc = BeginPaint(window, &paint);
         const UsageSnapshot snapshot = SnapshotCopy();
-        PaintDoubleBuffered(window, dc, [&](HDC buffer) {
-            ui::PaintPopup(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_, popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+        PaintDoubleBuffered(window, dc, BackdropStyleFor(window), [&](HDC buffer) {
+            ui::PaintPopup(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), usage_summary_copy_state_, popup_external_feedback_, popup_hover_, popup_pressed_, popup_hover_progress_, refresh_angle_, refresh_coordinator_.queued(), registered_global_shortcut_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0, BackdropStyleFor(window));
         });
         EndPaint(window, &paint);
         return 0;
@@ -2123,6 +2187,7 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     }
     case WM_THEMECHANGED:
     case WM_SYSCOLORCHANGE:
+    case WM_DWMCOMPOSITIONCHANGED:
     case WM_SETTINGCHANGE: {
         if (!AnimationsEnabled()) {
             KillTimer(popup_, kRefreshAnimationTimer);
@@ -2139,12 +2204,8 @@ LRESULT App::OnPopupMessage(HWND window, UINT message, WPARAM wparam, LPARAM lpa
             SetTimer(popup_, kRefreshAnimationTimer, 16, nullptr);
         }
         ApplyTheme(window);
-        ApplyTheme(settings_window_);
-        ApplyTheme(float_bar_window_);
         SyncAmbientAnimationTimer();
         InvalidateRect(window, nullptr, FALSE);
-        InvalidateRect(settings_window_, nullptr, FALSE);
-        InvalidateRect(float_bar_window_, nullptr, FALSE);
         return 0;
     }
     case WM_DESTROY: return 0;
@@ -2207,15 +2268,16 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         ui::PaintSettings(window, reinterpret_cast<HDC>(wparam), settings_, snapshot, update_check_, settings_tab_,
             ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_,
             diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_,
-            usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+            usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0,
+            BackdropStyleFor(window));
         return 0;
     }
     case WM_PAINT: {
         PAINTSTRUCT paint{};
         HDC dc = BeginPaint(window, &paint);
         const UsageSnapshot snapshot = SnapshotCopy();
-        PaintDoubleBuffered(window, dc, [&](HDC buffer) {
-            ui::PaintSettings(window, buffer, settings_, snapshot, update_check_, settings_tab_, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_, diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_, usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+        PaintDoubleBuffered(window, dc, BackdropStyleFor(window), [&](HDC buffer) {
+            ui::PaintSettings(window, buffer, settings_, snapshot, update_check_, settings_tab_, ShouldUseLightTheme(settings_.theme), ShouldUseChinese(settings_.language), settings_persistence_, diagnostics_copied_, settings_external_feedback_, CurrentRefreshPhase(), settings_hover_, settings_pressed_, settings_hover_progress_, global_shortcut_status_, usage_chart_hover_, usage_chart_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0, BackdropStyleFor(window));
         });
         EndPaint(window, &paint);
         return 0;
@@ -2339,12 +2401,13 @@ LRESULT App::OnSettingsMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         SetWindowPos(window, nullptr, suggested->left, suggested->top, suggested->right - suggested->left, suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
         return 0;
     }
+    case WM_THEMECHANGED:
+    case WM_SYSCOLORCHANGE:
+    case WM_DWMCOMPOSITIONCHANGED:
     case WM_SETTINGCHANGE:
         ApplyTheme(window);
+        SyncAmbientAnimationTimer();
         InvalidateRect(window, nullptr, FALSE);
-        InvalidateRect(popup_, nullptr, FALSE);
-        ApplyTheme(float_bar_window_);
-        InvalidateRect(float_bar_window_, nullptr, FALSE);
         return 0;
     default: return DefWindowProcW(window, message, wparam, lparam);
     }
@@ -2394,17 +2457,19 @@ LRESULT App::OnFloatBarMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         const UsageSnapshot snapshot = SnapshotCopy();
         ui::PaintFloatBar(window, reinterpret_cast<HDC>(wparam), snapshot, ShouldUseLightTheme(settings_.theme),
             ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), float_bar_hover_, float_bar_pressed_,
-            float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+            float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0,
+            BackdropStyleFor(window));
         return 0;
     }
     case WM_PAINT: {
         PAINTSTRUCT paint{};
         HDC dc = BeginPaint(window, &paint);
         const UsageSnapshot snapshot = SnapshotCopy();
-        PaintDoubleBuffered(window, dc, [&](HDC buffer) {
+        PaintDoubleBuffered(window, dc, BackdropStyleFor(window), [&](HDC buffer) {
             ui::PaintFloatBar(window, buffer, snapshot, ShouldUseLightTheme(settings_.theme),
                 ShouldUseChinese(settings_.language), settings_.hide_identity, CurrentRefreshPhase(), float_bar_hover_,
-                float_bar_pressed_, float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0);
+                float_bar_pressed_, float_bar_hover_progress_, DecorativeEffectsEnabled() ? ambient_animation_phase_ : -1.0,
+                BackdropStyleFor(window));
         });
         EndPaint(window, &paint);
         return 0;
@@ -2508,8 +2573,12 @@ LRESULT App::OnFloatBarMessage(HWND window, UINT message, WPARAM wparam, LPARAM 
         PersistFloatBarPosition();
         return 0;
     }
+    case WM_THEMECHANGED:
+    case WM_SYSCOLORCHANGE:
+    case WM_DWMCOMPOSITIONCHANGED:
     case WM_SETTINGCHANGE:
         ApplyTheme(window);
+        SyncAmbientAnimationTimer();
         InvalidateRect(window, nullptr, FALSE);
         return 0;
     default:

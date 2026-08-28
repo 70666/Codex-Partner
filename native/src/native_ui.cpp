@@ -74,7 +74,12 @@ void DrawPartnerMark(Graphics& graphics, const RectF& rect) {
     }
 }
 
-Palette Colors(bool light) {
+Palette Colors(bool light, BackdropStyle backdrop) {
+    if (light && backdrop == BackdropStyle::AcrylicGlass) return {
+        Color(154, 255, 248, 251), Color(228, 255, 253, 254), Color(214, 255, 246, 250),
+        Color(184, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
+        Color(255, 130, 106, 117), Color(255, 196, 63, 115), Color(216, 253, 229, 239),
+        Color(255, 39, 122, 93), Color(255, 143, 90, 0), Color(255, 191, 52, 77)};
     if (light) return {
         Color(255, 255, 248, 251), Color(255, 255, 253, 254), Color(255, 255, 246, 250),
         Color(255, 239, 218, 228), Color(255, 52, 42, 50), Color(255, 112, 91, 103),
@@ -170,16 +175,28 @@ void DrawCherryForeground(Graphics& graphics, float height, bool light, double a
 }
 
 void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palette& palette,
-    bool light, double ambient_phase, float variant) {
+    bool light, double ambient_phase, float variant, BackdropStyle backdrop) {
     if (!light || ambient_phase < 0.0) {
         SolidBrush background(palette.background);
         graphics.FillRectangle(&background, 0.0F, 0.0F, width, height);
         return;
     }
 
-    LinearGradientBrush background(RectF(0.0F, 0.0F, width, height),
-        Color(255, 255, 252, 253), palette.background, 112.0F);
-    graphics.FillRectangle(&background, 0.0F, 0.0F, width, height);
+    const bool glass = backdrop != BackdropStyle::Solid;
+    if (glass) {
+        const CompositingMode previous = graphics.GetCompositingMode();
+        graphics.SetCompositingMode(CompositingModeSourceCopy);
+        SolidBrush clear(Color(0, 0, 0, 0));
+        graphics.FillRectangle(&clear, 0.0F, 0.0F, width, height);
+        graphics.SetCompositingMode(previous);
+        LinearGradientBrush glass_tint(RectF(0.0F, 0.0F, width, height),
+            Color(166, 255, 253, 254), Color(126, 255, 238, 246), 112.0F);
+        graphics.FillRectangle(&glass_tint, 0.0F, 0.0F, width, height);
+    } else {
+        LinearGradientBrush background(RectF(0.0F, 0.0F, width, height),
+            Color(255, 255, 252, 253), palette.background, 112.0F);
+        graphics.FillRectangle(&background, 0.0F, 0.0F, width, height);
+    }
 
     // Broad, barely-visible blooms add depth without tinting cards or text.
     SolidBrush upper_glow(Color(28, 255, 205, 224));
@@ -831,18 +848,20 @@ void DrawSetupStep(Graphics& graphics, float y, const wchar_t* number, const wch
 
 void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase,
     CopySummaryState copy_state, ExternalActionFeedback external_feedback, PopupAction hovered, PopupAction pressed,
-    float hover_progress, float refresh_angle, bool refresh_queued, GlobalShortcut global_shortcut, double ambient_phase) {
+    float hover_progress, float refresh_angle, bool refresh_queued, GlobalShortcut global_shortcut, double ambient_phase,
+    BackdropStyle backdrop) {
     const bool refreshing = RefreshIsActive(refresh_phase);
     const bool scanning_spend = refresh_phase == RefreshPhase::ScanningSpend;
     const PopupLayout layout = ResolvePopupLayout(snapshot);
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-    graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
+    graphics.SetTextRenderingHint(backdrop == BackdropStyle::Solid ?
+        TextRenderingHintClearTypeGridFit : TextRenderingHintAntiAliasGridFit);
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
-    const Palette palette = Colors(light);
+    const Palette palette = Colors(light, backdrop);
     DrawWindowCanvas(graphics, static_cast<float>(kPopupWidth), static_cast<float>(kPopupHeight),
-        palette, light, ambient_phase, 1.0F);
+        palette, light, ambient_phase, 1.0F, backdrop);
 
     DrawPartnerMark(graphics, R(14.0F, 12.0F, 38.0F, 38.0F));
     Text(graphics, L"Codex Partner", R(60.0F, 10.0F, 180.0F, 26.0F), 15.0F, FontStyleBold, palette.text);
@@ -947,22 +966,27 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
         R(30.0F, layout.primary_y, 324.0F, 42.0F), 12.0F, FontStyleBold, palette.accent, StringAlignmentCenter);
     DrawCherryForeground(graphics, static_cast<float>(kPopupHeight),
         light, ambient_phase, BlossomSurface::Popup);
+    if (backdrop != BackdropStyle::Solid) {
+        StrokeRounded(graphics, R(0.5F, 0.5F, 399.0F,
+            static_cast<float>(layout.content_height) - 1.0F), 14.0F, palette.border);
+    }
     static_cast<void>(external_feedback);
     static_cast<void>(global_shortcut);
 }
 
 void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese,
     bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress,
-    double ambient_phase) {
+    double ambient_phase, BackdropStyle backdrop) {
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-    graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
+    graphics.SetTextRenderingHint(backdrop == BackdropStyle::Solid ?
+        TextRenderingHintClearTypeGridFit : TextRenderingHintAntiAliasGridFit);
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
-    const Palette palette = Colors(light);
+    const Palette palette = Colors(light, backdrop);
     const auto pace = MostUrgentPaceForecast(snapshot);
     DrawWindowCanvas(graphics, static_cast<float>(kFloatBarWidth), static_cast<float>(kFloatBarHeight),
-        palette, light, ambient_phase, 5.0F);
+        palette, light, ambient_phase, 5.0F, backdrop);
 
     if (hovered == FloatBarAction::OpenPopup) {
         FillRounded(graphics, R(3.0F, 3.0F, 378.0F, 70.0F), 12.0F,
@@ -1033,15 +1057,16 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     const UpdateCheckState& update, SettingsTab tab, bool light, bool chinese, SettingsPersistenceState persistence,
     bool diagnostics_copied, ExternalActionFeedback external_feedback, RefreshPhase refresh_phase, SettingsAction hovered, SettingsAction pressed,
     float hover_progress, GlobalShortcutStatus global_shortcut_status, std::optional<std::size_t> usage_chart_hover,
-    float usage_chart_progress, double ambient_phase) {
+    float usage_chart_progress, double ambient_phase, BackdropStyle backdrop) {
     const float scale = Scale(window);
     Graphics graphics(dc);
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-    graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
+    graphics.SetTextRenderingHint(backdrop == BackdropStyle::Solid ?
+        TextRenderingHintClearTypeGridFit : TextRenderingHintAntiAliasGridFit);
     graphics.ScaleTransform(scale * kContentScale, scale * kContentScale);
-    const Palette palette = Colors(light);
+    const Palette palette = Colors(light, backdrop);
     DrawWindowCanvas(graphics, static_cast<float>(kSettingsWidth), static_cast<float>(kSettingsHeight),
-        palette, light, ambient_phase, 8.0F);
+        palette, light, ambient_phase, 8.0F, backdrop);
 
     Text(graphics, T(chinese, L"Codex Partner Settings", L"Codex Partner 设置"), R(28.0F, 20.0F, 360.0F, 36.0F), 24.0F, FontStyleBold, palette.text);
     const bool external_active = external_feedback.outcome != ExternalActionOutcome::Idle;
@@ -1264,6 +1289,9 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
     }
     DrawCherryForeground(graphics, static_cast<float>(kSettingsHeight),
         light, ambient_phase, BlossomSurface::Settings);
+    if (backdrop != BackdropStyle::Solid) {
+        StrokeRounded(graphics, R(0.5F, 0.5F, 699.0F, 719.0F), 14.0F, palette.border);
+    }
 }
 
 PopupAction HitTestPopup(POINT point, float primary_y) noexcept {

@@ -90,7 +90,8 @@ private:
     void RefreshAsync(bool retain_if_active = true);
     void StartRefreshCycle();
     [[nodiscard]] RefreshPhase CurrentRefreshPhase() const noexcept;
-    void ApplyTheme(HWND window) const;
+    void ApplyTheme(HWND window);
+    [[nodiscard]] ui::BackdropStyle BackdropStyleFor(HWND window) const noexcept;
     void SyncAmbientAnimationTimer();
     void TickAmbientAnimation();
     bool SaveSettings();
@@ -186,6 +187,9 @@ private:
     float refresh_angle_ = 0.0F;
     double ambient_animation_phase_ = 12.0;
     std::chrono::steady_clock::time_point ambient_animation_tick_ = std::chrono::steady_clock::now();
+    ui::BackdropStyle popup_backdrop_ = ui::BackdropStyle::Solid;
+    ui::BackdropStyle settings_backdrop_ = ui::BackdropStyle::Solid;
+    ui::BackdropStyle float_bar_backdrop_ = ui::BackdropStyle::Solid;
     std::optional<std::size_t> usage_chart_hover_;
     float usage_chart_progress_ = 1.0F;
     bool popup_activation_handoff_pending_ = false;

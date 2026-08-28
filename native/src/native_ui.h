@@ -28,6 +28,7 @@ enum class PopupAction { None, CopySummary, Refresh, Settings, Close, Primary };
 enum class CopySummaryState { Idle, Copied, Failed };
 enum class FloatBarAction { None, OpenPopup, Hide };
 enum class SettingsTab { General, Providers, Notifications, FloatBar, UsageSpend, About };
+enum class BackdropStyle { Solid, AcrylicGlass };
 enum class SettingsAction {
     None,
     SelectGeneral,
@@ -66,9 +67,9 @@ struct PopupLayout {
     int content_height = 400;
 };
 
-void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, CopySummaryState copy_state, ExternalActionFeedback external_feedback, PopupAction hovered, PopupAction pressed, float hover_progress, float refresh_angle, bool refresh_queued = false, GlobalShortcut global_shortcut = GlobalShortcut::CtrlShiftU, double ambient_phase = 12.0);
-void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress, double ambient_phase = 12.0);
-void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const UsageSnapshot& snapshot, const UpdateCheckState& update, SettingsTab tab, bool light, bool chinese, SettingsPersistenceState persistence, bool diagnostics_copied, ExternalActionFeedback external_feedback, RefreshPhase refresh_phase, SettingsAction hovered, SettingsAction pressed, float hover_progress, GlobalShortcutStatus global_shortcut_status = GlobalShortcutStatus::Registered, std::optional<std::size_t> usage_chart_hover = std::nullopt, float usage_chart_progress = 1.0F, double ambient_phase = 12.0);
+void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, CopySummaryState copy_state, ExternalActionFeedback external_feedback, PopupAction hovered, PopupAction pressed, float hover_progress, float refresh_angle, bool refresh_queued = false, GlobalShortcut global_shortcut = GlobalShortcut::CtrlShiftU, double ambient_phase = 12.0, BackdropStyle backdrop = BackdropStyle::Solid);
+void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, bool chinese, bool identity_hidden, RefreshPhase refresh_phase, FloatBarAction hovered, FloatBarAction pressed, float hover_progress, double ambient_phase = 12.0, BackdropStyle backdrop = BackdropStyle::Solid);
+void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const UsageSnapshot& snapshot, const UpdateCheckState& update, SettingsTab tab, bool light, bool chinese, SettingsPersistenceState persistence, bool diagnostics_copied, ExternalActionFeedback external_feedback, RefreshPhase refresh_phase, SettingsAction hovered, SettingsAction pressed, float hover_progress, GlobalShortcutStatus global_shortcut_status = GlobalShortcutStatus::Registered, std::optional<std::size_t> usage_chart_hover = std::nullopt, float usage_chart_progress = 1.0F, double ambient_phase = 12.0, BackdropStyle backdrop = BackdropStyle::Solid);
 [[nodiscard]] inline PopupLayout ResolvePopupLayout(const UsageSnapshot& snapshot) noexcept {
     PopupLayout layout;
     const bool setup = NeedsProviderSetup(snapshot);

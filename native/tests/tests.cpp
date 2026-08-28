@@ -6,6 +6,7 @@
 #include "float_bar_model.h"
 #include "interaction_model.h"
 #include "notification_snooze.h"
+#include "premultiplied_surface.h"
 #include "refresh_coordinator.h"
 #include "resume_refresh_model.h"
 #include "settings_store.h"
@@ -73,6 +74,23 @@ int main(int argc, char** argv) {
                   << "thirty_day_partial=" << (spend.thirty_day_partial ? "true" : "false") << '\n'
                   << "partial=" << (spend.partial ? "true" : "false") << '\n';
         return 0;
+    }
+    {
+        std::array<std::uint32_t, 4> glass_pixels{
+            0x00123456U, 0x807D6E76U, 0x8040C020U, 0xFF342A32U};
+        codex_partner::rendering::FinalizeBgra(glass_pixels, true);
+        Require(glass_pixels[0] == 0U, "fully transparent glass pixels have zero RGB");
+        Require(glass_pixels[1] == 0x807D6E76U,
+            "already-premultiplied GDI+ pixels are not multiplied twice");
+        Require(glass_pixels[2] == 0x80408020U,
+            "out-of-contract channels are clamped to the premultiplied invariant");
+        Require(codex_partner::rendering::IsPremultipliedBgra(glass_pixels),
+            "every glass-buffer channel is bounded by its alpha value");
+
+        std::array<std::uint32_t, 2> solid_pixels{0x00112233U, 0x80112233U};
+        codex_partner::rendering::FinalizeBgra(solid_pixels, false);
+        Require(solid_pixels[0] == 0xFF112233U && solid_pixels[1] == 0xFF112233U,
+            "solid-buffer finalization preserves RGB and forces opaque alpha");
     }
     const auto parsed = codex_partner::ParseJson(R"({"tokens":{"access_token":"secret","account_id":"acct"},"rate_limit":{"primary_window":{"used_percent":46,"limit_window_seconds":18000}}})");
     Require(parsed.ok(), "representative Codex JSON parses");
