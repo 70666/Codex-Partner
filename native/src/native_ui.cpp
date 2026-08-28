@@ -113,6 +113,62 @@ void DrawCherryPetal(Graphics& graphics, float x, float y, float size, float ang
     graphics.Restore(state);
 }
 
+enum class BlossomSurface {
+    Popup,
+    Settings,
+    FloatBar,
+};
+
+void DrawCherryForeground(Graphics& graphics, float height, bool light, double ambient_phase,
+    BlossomSurface surface) {
+    if (!light || ambient_phase < 0.0) return;
+
+    struct EdgePetal {
+        float y;
+        float speed;
+        float size;
+        float phase;
+        float spin;
+    };
+    static constexpr std::array<EdgePetal, 6> seeds{{
+        {0.08F, 8.2F, 8.6F, 0.4F, 14.0F},
+        {0.28F, 6.7F, 7.3F, 2.2F, -11.0F},
+        {0.47F, 9.4F, 9.2F, 4.7F, 16.0F},
+        {0.66F, 7.5F, 7.8F, 1.3F, -15.0F},
+        {0.83F, 8.8F, 8.2F, 3.5F, 12.0F},
+        {0.94F, 6.2F, 7.0F, 5.4F, -17.0F},
+    }};
+
+    const std::size_t count = surface == BlossomSurface::Settings ? 6 :
+        surface == BlossomSurface::Popup ? 4 : 2;
+    for (std::size_t index = 0; index < count; ++index) {
+        const EdgePetal& seed = seeds[index];
+        float lane_x = 0.0F;
+        float size = seed.size;
+        BYTE alpha = 76;
+        if (surface == BlossomSurface::Settings) {
+            constexpr std::array<float, 6> lanes{8.0F, 202.0F, 692.0F, 202.0F, 8.0F, 692.0F};
+            lane_x = lanes[index];
+        } else if (surface == BlossomSurface::Popup) {
+            constexpr std::array<float, 4> lanes{7.0F, 393.0F, 8.0F, 392.0F};
+            lane_x = lanes[index];
+            size *= 0.86F;
+            alpha = 72;
+        } else {
+            constexpr std::array<float, 2> lanes{138.0F, 378.0F};
+            lane_x = lanes[index];
+            size *= 0.64F;
+            alpha = 64;
+        }
+        const float travel = height + size * 3.0F;
+        const float y = static_cast<float>(std::fmod(seed.y * height + ambient_phase * seed.speed,
+            static_cast<double>(travel))) - size * 1.5F;
+        const float x = lane_x + static_cast<float>(std::sin(ambient_phase * 0.54 + seed.phase)) * 2.5F;
+        const float angle = static_cast<float>(std::fmod(ambient_phase * seed.spin + seed.phase * 27.0F, 360.0));
+        DrawCherryPetal(graphics, x, y, size, angle, alpha);
+    }
+}
+
 void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palette& palette,
     bool light, double ambient_phase, float variant) {
     if (!light || ambient_phase < 0.0) {
@@ -142,18 +198,18 @@ void DrawWindowCanvas(Graphics& graphics, float width, float height, const Palet
         BYTE alpha;
     };
     static constexpr std::array<PetalSeed, 12> seeds{{
-        {0.05F, 0.08F, 9.0F, 13.0F, 3.3F, 0.2F, 17.0F, 54},
-        {0.16F, 0.58F, 6.5F, 9.0F, 2.6F, 2.1F, -13.0F, 42},
-        {0.28F, 0.22F, 8.0F, 17.0F, 4.1F, 4.3F, 11.0F, 50},
-        {0.39F, 0.78F, 5.8F, 11.0F, 2.8F, 1.4F, -19.0F, 38},
-        {0.49F, 0.42F, 7.2F, 15.0F, 3.6F, 5.2F, 15.0F, 48},
-        {0.61F, 0.12F, 8.8F, 10.0F, 2.5F, 3.2F, -16.0F, 40},
-        {0.71F, 0.69F, 6.0F, 18.0F, 4.0F, 0.9F, 12.0F, 46},
-        {0.82F, 0.31F, 7.8F, 12.0F, 3.0F, 2.8F, -14.0F, 52},
-        {0.93F, 0.83F, 5.5F, 10.0F, 2.7F, 4.7F, 18.0F, 38},
-        {0.12F, 0.91F, 6.8F, 14.0F, 3.5F, 3.7F, -11.0F, 45},
-        {0.55F, 0.94F, 7.4F, 9.0F, 2.4F, 1.8F, 20.0F, 36},
-        {0.88F, 0.06F, 8.3F, 16.0F, 3.8F, 5.8F, -17.0F, 48}
+        {0.05F, 0.08F, 9.0F, 13.0F, 5.7F, 0.2F, 17.0F, 64},
+        {0.16F, 0.58F, 6.5F, 9.0F, 4.8F, 2.1F, -13.0F, 54},
+        {0.28F, 0.22F, 8.0F, 17.0F, 7.2F, 4.3F, 11.0F, 62},
+        {0.39F, 0.78F, 5.8F, 11.0F, 5.0F, 1.4F, -19.0F, 50},
+        {0.49F, 0.42F, 7.2F, 15.0F, 6.3F, 5.2F, 15.0F, 60},
+        {0.61F, 0.12F, 8.8F, 10.0F, 4.6F, 3.2F, -16.0F, 52},
+        {0.71F, 0.69F, 6.0F, 18.0F, 6.9F, 0.9F, 12.0F, 58},
+        {0.82F, 0.31F, 7.8F, 12.0F, 5.4F, 2.8F, -14.0F, 64},
+        {0.93F, 0.83F, 5.5F, 10.0F, 4.9F, 4.7F, 18.0F, 50},
+        {0.12F, 0.91F, 6.8F, 14.0F, 6.1F, 3.7F, -11.0F, 57},
+        {0.55F, 0.94F, 7.4F, 9.0F, 4.5F, 1.8F, 20.0F, 48},
+        {0.88F, 0.06F, 8.3F, 16.0F, 6.6F, 5.8F, -17.0F, 60}
     }};
     const std::size_t count = height < 120.0F ? 4 : width < 500.0F ? 8 : seeds.size();
     for (std::size_t index = 0; index < count; ++index) {
@@ -889,6 +945,8 @@ void PaintPopup(HWND window, HDC dc, const UsageSnapshot& snapshot, bool light, 
             T(chinese, L"Detailed analytics", L"详细分析");
     Text(graphics, primary_label,
         R(30.0F, layout.primary_y, 324.0F, 42.0F), 12.0F, FontStyleBold, palette.accent, StringAlignmentCenter);
+    DrawCherryForeground(graphics, static_cast<float>(kPopupHeight),
+        light, ambient_phase, BlossomSurface::Popup);
     static_cast<void>(external_feedback);
     static_cast<void>(global_shortcut);
 }
@@ -966,6 +1024,8 @@ void PaintFloatBar(HWND window, HDC dc, const UsageSnapshot& snapshot, bool ligh
     Text(graphics, L"×", close_rect, 15.0F, FontStyleRegular,
         hovered == FloatBarAction::Hide ? palette.accent : palette.secondary, StringAlignmentCenter);
 
+    DrawCherryForeground(graphics, static_cast<float>(kFloatBarHeight),
+        light, ambient_phase, BlossomSurface::FloatBar);
     StrokeRounded(graphics, R(0.5F, 0.5F, 419.0F, 75.0F), 13.0F, palette.border);
 }
 
@@ -1202,6 +1262,8 @@ void PaintSettings(HWND window, HDC dc, const AppSettings& settings, const Usage
         Text(graphics, SettingsActionHint(hovered, chinese), R(220.0F, 700.0F, 440.0F, 18.0F), 9.0F,
             FontStyleRegular, palette.accent, StringAlignmentCenter);
     }
+    DrawCherryForeground(graphics, static_cast<float>(kSettingsHeight),
+        light, ambient_phase, BlossomSurface::Settings);
 }
 
 PopupAction HitTestPopup(POINT point, float primary_y) noexcept {
